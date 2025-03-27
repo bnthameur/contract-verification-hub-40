@@ -8,6 +8,8 @@ import { ShieldCheck } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -17,8 +19,15 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { signIn, signUp, user } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
+    // If user is already logged in, redirect to dashboard
+    if (user) {
+      navigate("/dashboard");
+    }
+
     const params = new URLSearchParams(location.search);
     const modeParam = params.get("mode");
     if (modeParam === "register") {
@@ -26,17 +35,49 @@ export default function AuthPage() {
     } else {
       setMode("login");
     }
-  }, [location]);
+  }, [location, navigate, user]);
 
-  const handleAuth = (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
-    // Mock authentication - in a real app this would connect to Supabase
-    setTimeout(() => {
+    try {
+      if (mode === "login") {
+        const { error } = await signIn(email, password);
+        if (error) throw error;
+        navigate("/dashboard");
+      } else {
+        // Register
+        if (password !== confirmPassword) {
+          toast({
+            title: "Passwords don't match",
+            description: "Please make sure your passwords match.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+        
+        const { error } = await signUp(email, password);
+        if (error) throw error;
+        
+        toast({
+          title: "Registration successful",
+          description: "Please check your email to confirm your account.",
+        });
+        
+        // Navigate to login after successful registration
+        setMode("login");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Authentication error",
+        description: error.message || "An error occurred during authentication",
+        variant: "destructive",
+      });
+    } finally {
       setLoading(false);
-      navigate("/dashboard");
-    }, 1500);
+    }
   };
 
   return (
@@ -45,12 +86,12 @@ export default function AuthPage() {
       
       <main className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md animate-fade-in-up">
-          <Card className="glass-card">
+          <Card>
             <CardHeader className="space-y-1 flex flex-col items-center text-center">
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+              <div className="w-12 h-12 bg-primary/10 flex items-center justify-center mb-2">
                 <ShieldCheck className="text-primary w-6 h-6" />
               </div>
-              <CardTitle className="text-2xl">Welcome back</CardTitle>
+              <CardTitle className="text-2xl">Welcome to Formal</CardTitle>
               <CardDescription>
                 Enter your credentials to {mode === "login" ? "sign in to" : "create"} your account
               </CardDescription>

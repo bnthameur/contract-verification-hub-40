@@ -5,106 +5,81 @@ import { MonacoEditor } from "@/components/editor/MonacoEditor";
 import { VerificationPanel } from "@/components/verification/VerificationPanel";
 import { Project, VerificationIssue, VerificationLevel, VerificationResult, VerificationStatus } from "@/types";
 import { useState, useEffect } from "react";
-import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Save } from "lucide-react";
+import { ChevronRight, Save, Upload, FileSymlink, PlusCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-
-// Mock data for the sample project to demonstrate UI
-const MOCK_USER = {
-  id: "user-1",
-  email: "user@example.com",
-  created_at: new Date().toISOString(),
-};
-
-const SAMPLE_PROJECT: Project = {
-  id: "proj-1",
-  name: "Token Contract",
-  description: "ERC-20 token implementation with additional features",
-  code: `// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-contract MyToken {
-    string public name = "My Token";
-    string public symbol = "MTK";
-    uint8 public decimals = 18;
-    uint256 public totalSupply = 1000000 * 10 ** uint256(decimals);
-    
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
-    
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-    
-    constructor() {
-        balanceOf[msg.sender] = totalSupply;
-    }
-    
-    function transfer(address to, uint256 value) public returns (bool success) {
-        require(to != address(0), "Transfer to zero address");
-        require(balanceOf[msg.sender] >= value, "Insufficient balance");
-        
-        balanceOf[msg.sender] -= value;
-        balanceOf[to] += value;
-        emit Transfer(msg.sender, to, value);
-        return true;
-    }
-    
-    function approve(address spender, uint256 value) public returns (bool success) {
-        allowance[msg.sender][spender] = value;
-        emit Approval(msg.sender, spender, value);
-        return true;
-    }
-    
-    function transferFrom(address from, address to, uint256 value) public returns (bool success) {
-        require(to != address(0), "Transfer to zero address");
-        require(balanceOf[from] >= value, "Insufficient balance");
-        require(allowance[from][msg.sender] >= value, "Insufficient allowance");
-        
-        balanceOf[from] -= value;
-        balanceOf[to] += value;
-        allowance[from][msg.sender] -= value;
-        emit Transfer(from, to, value);
-        return true;
-    }
-}`,
-  user_id: "user-1",
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
-// Sample projects list
-const SAMPLE_PROJECTS: Project[] = [
-  SAMPLE_PROJECT,
-  {
-    id: "proj-2",
-    name: "NFT Marketplace",
-    description: "A smart contract for trading NFTs",
-    code: `// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
-
-contract NFTMarketplace {
-    // Basic NFT marketplace implementation
-    // (stub for demonstration purposes)
-}`,
-    user_id: "user-1",
-    created_at: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-    updated_at: new Date(Date.now() - 86400000).toISOString(),
-  }
-];
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function DashboardPage() {
-  const [user] = useState(MOCK_USER);
-  const [projects, setProjects] = useState<Project[]>(SAMPLE_PROJECTS);
-  const [activeProject, setActiveProject] = useState<Project | undefined>(SAMPLE_PROJECT);
-  const [code, setCode] = useState(SAMPLE_PROJECT.code);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProject, setActiveProject] = useState<Project | undefined>();
+  const [code, setCode] = useState("");
   const [verificationResult, setVerificationResult] = useState<VerificationResult | undefined>();
+  const [isUploading, setIsUploading] = useState(false);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  // Simulate saving code changes to active project
-  const handleSaveCode = () => {
-    if (activeProject) {
+  // Fetch user's projects
+  useEffect(() => {
+    if (user) {
+      fetchProjects();
+    }
+  }, [user]);
+
+  const fetchProjects = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false });
+        
+      if (error) throw error;
+      
+      if (data) {
+        setProjects(data);
+        if (data.length > 0 && !activeProject) {
+          setActiveProject(data[0]);
+          setCode(data[0].code);
+        }
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error fetching projects",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Save code changes to active project
+  const handleSaveCode = async () => {
+    if (!activeProject || !user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          code,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', activeProject.id)
+        .eq('user_id', user.id);
+        
+      if (error) throw error;
+      
+      // Update local state
       const updatedProject = {
         ...activeProject,
         code,
@@ -120,102 +95,226 @@ export default function DashboardPage() {
         title: "Project saved",
         description: "Your code changes have been saved.",
       });
+    } catch (error: any) {
+      toast({
+        title: "Error saving project",
+        description: error.message,
+        variant: "destructive",
+      });
     }
   };
 
-  // Handle creation of a new project
-  const handleCreateProject = (name: string, description: string) => {
-    const newProject: Project = {
-      id: `proj-${projects.length + 1}`,
-      name,
-      description,
-      code: `// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract ${name.replace(/\s+/g, '')} {\n    // Your code here\n}`,
-      user_id: user.id,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+  // Create a new project
+  const handleCreateProject = async () => {
+    if (!user) return;
     
-    setProjects(prev => [...prev, newProject]);
-    setActiveProject(newProject);
-    setCode(newProject.code);
+    try {
+      const newProject = {
+        name,
+        description,
+        code: `// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract ${name.replace(/\s+/g, '')} {\n    // Your code here\n}`,
+        user_id: user.id,
+      };
+      
+      const { data, error } = await supabase
+        .from('projects')
+        .insert(newProject)
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      if (data) {
+        setProjects(prev => [...prev, data]);
+        setActiveProject(data);
+        setCode(data.code);
+        setName("");
+        setDescription("");
+        setOpen(false);
+        
+        toast({
+          title: "Project created",
+          description: `${data.name} has been created successfully.`,
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error creating project",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user) return;
     
-    toast({
-      title: "Project created",
-      description: `${name} has been created successfully.`,
-    });
+    // Check if it's a .sol file
+    if (!file.name.endsWith('.sol')) {
+      toast({
+        title: "Invalid file",
+        description: "Please upload a Solidity (.sol) file",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsUploading(true);
+    
+    try {
+      // Read file content
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        const fileContent = e.target?.result as string;
+        
+        // Create a new project with the file content
+        const fileName = file.name.replace('.sol', '');
+        
+        const newProject = {
+          name: fileName,
+          description: `Imported from ${file.name}`,
+          code: fileContent,
+          user_id: user.id,
+        };
+        
+        const { data, error } = await supabase
+          .from('projects')
+          .insert(newProject)
+          .select()
+          .single();
+          
+        if (error) throw error;
+        
+        if (data) {
+          setProjects(prev => [...prev, data]);
+          setActiveProject(data);
+          setCode(data.code);
+          
+          toast({
+            title: "File imported",
+            description: `${fileName} has been imported successfully.`,
+          });
+        }
+      };
+      
+      reader.readAsText(file);
+    } catch (error: any) {
+      toast({
+        title: "Error importing file",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+      // Reset the input
+      event.target.value = '';
+    }
   };
 
   // Simulate verification process
-  const handleStartVerification = (level: VerificationLevel) => {
-    // Create a new verification result
-    const newResult: VerificationResult = {
-      id: `verif-${Date.now()}`,
-      project_id: activeProject?.id || "",
-      level,
-      status: VerificationStatus.RUNNING,
-      results: [],
-      logs: ["Initializing verification..."],
-      created_at: new Date().toISOString(),
-    };
+  const handleStartVerification = async (level: VerificationLevel) => {
+    if (!activeProject) return;
     
-    setVerificationResult(newResult);
-    
-    // Simulate verification steps with delays
-    const steps = [
-      "Parsing Solidity code...",
-      "Analyzing contract structure...",
-      "Running slither analysis...",
-      "Checking for common vulnerabilities...",
-      "Verifying arithmetic operations...",
-      "Analyzing control flow...",
-      "Checking reentrancy guards...",
-      "Evaluating gas usage...",
-      "Finalizing results..."
-    ];
-    
-    // Sample issues based on the code (for demonstration)
-    const sampleIssues: VerificationIssue[] = [
-      {
-        type: "warning",
-        message: "Missing input validation: value parameter should be checked for potential overflow",
-        location: { line: 26, column: 28 },
-        code: "function transfer(address to, uint256 value) public returns (bool success) {",
-        severity: "medium"
-      },
-      {
-        type: "info",
-        message: "Consider using SafeMath library for arithmetic operations",
-        severity: "low"
-      }
-    ];
-    
-    // If we're using the medium level, add a more complex issue
-    if (level === VerificationLevel.MEDIUM) {
-      sampleIssues.push({
-        type: "error",
-        message: "Potential integer overflow in transferFrom function",
-        location: { line: 42, column: 18 },
-        code: "balanceOf[to] += value;",
-        severity: "high"
-      });
-    }
-    
-    // Simulate the verification steps with delays
-    let stepIndex = 0;
-    const interval = setInterval(() => {
-      if (stepIndex < steps.length) {
-        setVerificationResult(prev => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            logs: [...prev.logs, steps[stepIndex]],
-          };
-        });
-        stepIndex++;
-      } else {
-        clearInterval(interval);
+    try {
+      // Create a new verification result
+      const newResult: VerificationResult = {
+        id: crypto.randomUUID(),
+        project_id: activeProject.id,
+        level,
+        status: VerificationStatus.RUNNING,
+        results: [],
+        logs: ["Initializing verification..."],
+        created_at: new Date().toISOString(),
+      };
+      
+      const { data, error } = await supabase
+        .from('verification_results')
+        .insert(newResult)
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      if (data) {
+        setVerificationResult(data);
+        
+        // Simulate verification steps with delays
+        const steps = [
+          "Parsing Solidity code...",
+          "Analyzing contract structure...",
+          "Running slither analysis...",
+          "Checking for common vulnerabilities...",
+          "Verifying arithmetic operations...",
+          "Analyzing control flow...",
+          "Checking reentrancy guards...",
+          "Evaluating gas usage...",
+          "Finalizing results..."
+        ];
+        
+        // Sample issues based on the code (for demonstration)
+        const sampleIssues: VerificationIssue[] = [
+          {
+            type: "warning",
+            message: "Missing input validation: value parameter should be checked for potential overflow",
+            location: { line: 26, column: 28 },
+            code: "function transfer(address to, uint256 value) public returns (bool success) {",
+            severity: "medium"
+          },
+          {
+            type: "info",
+            message: "Consider using SafeMath library for arithmetic operations",
+            severity: "low"
+          }
+        ];
+        
+        // If we're using the medium level, add a more complex issue
+        if (level === VerificationLevel.MEDIUM) {
+          sampleIssues.push({
+            type: "error",
+            message: "Potential integer overflow in transferFrom function",
+            location: { line: 42, column: 18 },
+            code: "balanceOf[to] += value;",
+            severity: "high"
+          });
+        }
+        
+        // Simulate the verification steps with delays
+        for (let i = 0; i < steps.length; i++) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          const { error } = await supabase
+            .from('verification_results')
+            .update({
+              logs: [...data.logs, steps[i]],
+            })
+            .eq('id', data.id);
+            
+          if (error) throw error;
+          
+          setVerificationResult(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              logs: [...prev.logs, steps[i]],
+            };
+          });
+        }
         
         // Complete the verification
+        const { error: updateError } = await supabase
+          .from('verification_results')
+          .update({
+            status: VerificationStatus.COMPLETED,
+            results: sampleIssues,
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', data.id);
+          
+        if (updateError) throw updateError;
+        
         setVerificationResult(prev => {
           if (!prev) return prev;
           return {
@@ -231,27 +330,56 @@ export default function DashboardPage() {
           description: `Found ${sampleIssues.length} issues.`,
         });
       }
-    }, 1000);
+    } catch (error: any) {
+      toast({
+        title: "Error during verification",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
+  // Load verification results when switching projects
   useEffect(() => {
     if (activeProject) {
       setCode(activeProject.code);
       // Reset verification result when switching projects
       setVerificationResult(undefined);
+      
+      // If there are existing verification results, fetch the latest one
+      const fetchVerificationResults = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('verification_results')
+            .select('*')
+            .eq('project_id', activeProject.id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+            
+          if (error) throw error;
+          
+          if (data && data.length > 0) {
+            setVerificationResult(data[0]);
+          }
+        } catch (error: any) {
+          console.error('Error fetching verification results:', error);
+        }
+      };
+      
+      fetchVerificationResults();
     }
   }, [activeProject]);
 
   return (
     <div className="flex h-screen flex-col">
-      <Navbar user={user} />
+      <Navbar />
       
       <div className="flex flex-1 overflow-hidden">
         <Sidebar 
           projects={projects} 
           activeProject={activeProject} 
           onSelectProject={setActiveProject}
-          onCreateProject={handleCreateProject}
+          onCreateProject={() => setOpen(true)}
         />
         
         <main className="flex-1 flex flex-col overflow-hidden">
@@ -263,10 +391,12 @@ export default function DashboardPage() {
                   <ChevronRight className="h-4 w-4 mx-1" />
                   <span className="font-medium text-foreground">{activeProject.name}</span>
                 </div>
-                <Button size="sm" onClick={handleSaveCode} className="gap-1.5">
-                  <Save className="h-4 w-4" />
-                  Save
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleSaveCode} className="gap-1.5">
+                    <Save className="h-4 w-4" />
+                    Save
+                  </Button>
+                </div>
               </div>
               
               <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-3">
@@ -284,7 +414,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     
-                    <TabsContent value="code" className="flex-1 rounded-md border p-0 overflow-hidden">
+                    <TabsContent value="code" className="flex-1 border p-0 overflow-hidden">
                       <MonacoEditor value={code} onChange={setCode} />
                     </TabsContent>
                   </Tabs>
@@ -302,14 +432,75 @@ export default function DashboardPage() {
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <h2 className="text-xl font-semibold mb-2">No project selected</h2>
-                <p className="text-muted-foreground mb-4">
-                  Select a project from the sidebar or create a new one.
+              <div className="text-center max-w-md p-6">
+                <h2 className="text-2xl font-semibold mb-4">Welcome to Formal</h2>
+                <p className="text-muted-foreground mb-8">
+                  Start by creating a new project or importing a Solidity file
                 </p>
-                <Button onClick={() => document.querySelector<HTMLButtonElement>('[aria-label="Create project"]')?.click()}>
-                  Create New Project
-                </Button>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Dialog open={open} onOpenChange={setOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="w-full flex items-center justify-center gap-2 p-6 h-auto flex-col">
+                        <PlusCircle className="h-8 w-8 mb-2" />
+                        <div>
+                          <div className="font-medium">Create Project</div>
+                          <div className="text-xs text-muted-foreground">Start from scratch</div>
+                        </div>
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Create New Project</DialogTitle>
+                        <DialogDescription>
+                          Create a new Solidity project to verify.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="name">Project Name</Label>
+                          <Input 
+                            id="name" 
+                            placeholder="My Smart Contract" 
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="description">Description (Optional)</Label>
+                          <Textarea 
+                            id="description" 
+                            placeholder="A brief description of your project"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                        <Button onClick={handleCreateProject} disabled={!name.trim()}>Create Project</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                  
+                  <label htmlFor="file-upload">
+                    <div className="w-full bg-muted hover:bg-muted/80 flex items-center justify-center gap-2 p-6 h-full flex-col cursor-pointer border">
+                      <FileSymlink className="h-8 w-8 mb-2" />
+                      <div>
+                        <div className="font-medium">Import File</div>
+                        <div className="text-xs text-muted-foreground">Upload .sol file</div>
+                      </div>
+                    </div>
+                    <input 
+                      id="file-upload" 
+                      type="file" 
+                      accept=".sol" 
+                      className="hidden" 
+                      onChange={handleFileUpload}
+                      disabled={isUploading}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
           )}

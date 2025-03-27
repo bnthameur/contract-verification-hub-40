@@ -4,8 +4,11 @@ import { UserNav } from "@/components/layout/UserNav";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
-export function Navbar({ user }: { user?: { email: string; avatar_url?: string } }) {
+export function Navbar() {
+  const { user } = useAuth();
+
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center">
@@ -13,7 +16,7 @@ export function Navbar({ user }: { user?: { email: string; avatar_url?: string }
           <Link to="/" className="flex items-center space-x-2">
             <ShieldCheck className="h-6 w-6 text-primary" />
             <span className="hidden font-bold sm:inline-block">
-              Solidity Verifier
+              Formal
             </span>
           </Link>
         </div>
@@ -21,7 +24,7 @@ export function Navbar({ user }: { user?: { email: string; avatar_url?: string }
           <nav className="flex items-center space-x-2">
             <ThemeToggle />
             {user ? (
-              <UserNav user={user} />
+              <UserNav user={{ email: user.email || "", avatar_url: user.user_metadata?.avatar_url }} />
             ) : (
               <div className="flex items-center gap-2">
                 <Button variant="ghost" asChild>

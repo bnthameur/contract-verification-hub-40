@@ -11,20 +11,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function UserNav({ user }: { user: { email: string; avatar_url?: string } }) {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
   const initials = user.email.charAt(0).toUpperCase();
 
-  const handleLogout = () => {
-    // In a real app, would handle logout logic here
+  const handleLogout = async () => {
+    await signOut();
     navigate("/auth");
   };
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+        <Button variant="ghost" className="relative h-10 w-10">
           <Avatar className="h-10 w-10">
             <AvatarImage src={user.avatar_url} alt={user.email} />
             <AvatarFallback className="bg-primary text-primary-foreground">
