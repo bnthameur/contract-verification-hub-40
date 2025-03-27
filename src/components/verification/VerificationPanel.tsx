@@ -145,7 +145,7 @@ export function VerificationPanel({ projectId, code, onVerify, result }: Verific
                     <div>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-medium">Verification Summary</h3>
-                        <Badge variant={hasErrors ? "destructive" : "success"}>
+                        <Badge variant={hasErrors ? "destructive" : "secondary"}>
                           {hasErrors ? "Issues Found" : "Passed"}
                         </Badge>
                       </div>
