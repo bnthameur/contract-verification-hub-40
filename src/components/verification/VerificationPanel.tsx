@@ -5,7 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VerificationIssue, VerificationLevel, VerificationResult, VerificationStatus } from "@/types";
-import { CheckCircle, AlertTriangle, XCircle, Play, Loader2, Terminal, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
+import { CheckCircle, AlertTriangle, XCircle, Play, Loader2, Terminal, Shield, ShieldAlert, ShieldCheck, Square } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
@@ -14,10 +14,11 @@ interface VerificationPanelProps {
   projectId: string;
   code: string;
   onVerify: (level: VerificationLevel) => void;
+  onStop?: () => void;
   result?: VerificationResult;
 }
 
-export function VerificationPanel({ projectId, code, onVerify, result }: VerificationPanelProps) {
+export function VerificationPanel({ projectId, code, onVerify, onStop, result }: VerificationPanelProps) {
   const [level, setLevel] = useState<VerificationLevel>(VerificationLevel.SIMPLE);
   const isVerifying = result?.status === VerificationStatus.RUNNING;
   const isPending = result?.status === VerificationStatus.PENDING;
@@ -31,6 +32,12 @@ export function VerificationPanel({ projectId, code, onVerify, result }: Verific
 
   const handleStartVerification = () => {
     onVerify(level);
+  };
+
+  const handleStopVerification = () => {
+    if (onStop) {
+      onStop();
+    }
   };
 
   return (
@@ -193,11 +200,21 @@ export function VerificationPanel({ projectId, code, onVerify, result }: Verific
           )}
         </div>
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex gap-2">
+        {isVerifying && onStop && (
+          <Button 
+            onClick={handleStopVerification}
+            variant="outline"
+            className="flex-1"
+          >
+            <Square className="mr-2 h-4 w-4" />
+            Stop Verification
+          </Button>
+        )}
         <Button 
           onClick={handleStartVerification} 
           disabled={isVerifying}
-          className="w-full"
+          className={isVerifying && onStop ? "flex-1" : "w-full"}
         >
           {isVerifying ? (
             <>
