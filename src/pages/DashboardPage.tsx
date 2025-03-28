@@ -4,7 +4,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { MonacoEditor } from "@/components/editor/MonacoEditor";
 import { VerificationPanel } from "@/components/verification/VerificationPanel";
 import { Project, VerificationIssue, VerificationLevel, VerificationResult, VerificationStatus } from "@/types";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, Save, Upload, FileSymlink, PlusCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { LightRay } from "@/components/layout/LightRay";
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -25,6 +26,7 @@ export default function DashboardPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [open, setOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -146,10 +148,23 @@ export default function DashboardPage() {
     }
   };
 
-  // Handle file upload
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !user) return;
+  // Handle file drop for upload
+  const handleDrop = useCallback(
+    async (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setIsDragging(false);
+      
+      const file = e.dataTransfer.files?.[0];
+      if (!file || !user) return;
+      
+      await handleFileUploadLogic(file);
+    },
+    [user]
+  );
+
+  // Handle file upload (either from drop or file input)
+  const handleFileUploadLogic = async (file: File) => {
+    if (!user) return;
     
     // Check if it's a .sol file
     if (!file.name.endsWith('.sol')) {
@@ -209,9 +224,18 @@ export default function DashboardPage() {
       });
     } finally {
       setIsUploading(false);
-      // Reset the input
-      event.target.value = '';
     }
+  };
+
+  // Handle file selection from input
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    await handleFileUploadLogic(file);
+    
+    // Reset the input
+    event.target.value = '';
   };
 
   // Simulate verification process
@@ -339,6 +363,43 @@ export default function DashboardPage() {
     }
   };
 
+  // Stop verification
+  const handleStopVerification = async () => {
+    if (!verificationResult || verificationResult.status !== VerificationStatus.RUNNING) return;
+    
+    try {
+      const { error } = await supabase
+        .from('verification_results')
+        .update({
+          status: VerificationStatus.FAILED,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', verificationResult.id);
+        
+      if (error) throw error;
+      
+      setVerificationResult(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          status: VerificationStatus.FAILED,
+          completed_at: new Date().toISOString(),
+        };
+      });
+      
+      toast({
+        title: "Verification stopped",
+        description: "The verification process has been stopped.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error stopping verification",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   // Load verification results when switching projects
   useEffect(() => {
     if (activeProject) {
@@ -370,8 +431,19 @@ export default function DashboardPage() {
     }
   }, [activeProject]);
 
+  // Handle drag events
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
   return (
     <div className="flex h-screen flex-col">
+      <LightRay />
       <Navbar />
       
       <div className="flex flex-1 overflow-hidden">
@@ -425,14 +497,20 @@ export default function DashboardPage() {
                     projectId={activeProject.id} 
                     code={code}
                     onVerify={handleStartVerification}
+                    onStop={handleStopVerification}
                     result={verificationResult}
                   />
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center max-w-md p-6">
+            <div 
+              className="flex-1 flex items-center justify-center"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <div className={`text-center max-w-md p-6 transition-all ${isDragging ? 'scale-105 opacity-70' : ''}`}>
                 <h2 className="text-2xl font-semibold mb-4">Welcome to Formal</h2>
                 <p className="text-muted-foreground mb-8">
                   Start by creating a new project or importing a Solidity file
@@ -483,24 +561,29 @@ export default function DashboardPage() {
                     </DialogContent>
                   </Dialog>
                   
-                  <label htmlFor="file-upload">
-                    <div className="w-full bg-muted hover:bg-muted/80 flex items-center justify-center gap-2 p-6 h-full flex-col cursor-pointer border">
-                      <FileSymlink className="h-8 w-8 mb-2" />
-                      <div>
-                        <div className="font-medium">Import File</div>
-                        <div className="text-xs text-muted-foreground">Upload .sol file</div>
-                      </div>
+                  <div 
+                    className={`w-full bg-muted hover:bg-muted/80 flex items-center justify-center gap-2 p-6 h-full flex-col cursor-pointer border relative ${isDragging ? 'ring-2 ring-primary' : ''}`}
+                  >
+                    <FileSymlink className="h-8 w-8 mb-2" />
+                    <div>
+                      <div className="font-medium">Import File</div>
+                      <div className="text-xs text-muted-foreground">Upload or drop .sol file</div>
                     </div>
                     <input 
                       id="file-upload" 
                       type="file" 
                       accept=".sol" 
-                      className="hidden" 
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       onChange={handleFileUpload}
                       disabled={isUploading}
                     />
-                  </label>
+                  </div>
                 </div>
+                {isDragging && (
+                  <div className="mt-8 p-4 border border-dashed border-primary rounded-md animate-pulse">
+                    <p className="text-primary font-medium">Drop your .sol file here</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
