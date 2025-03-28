@@ -41,6 +41,11 @@ export default function DashboardPage() {
     if (!user) return;
     
     try {
+      // First ensure user profile exists
+      if (user.email) {
+        await ensureUserProfile(user.id, user.email);
+      }
+      
       const { data, error } = await supabase
         .from('projects')
         .select('*')
@@ -108,11 +113,11 @@ export default function DashboardPage() {
 
   // Create a new project
   const handleCreateProject = async () => {
-    if (!user) return;
+    if (!user || !user.email) return;
     
     try {
       // First ensure the user profile exists
-      await ensureUserProfile(user.id, user.email || '');
+      await ensureUserProfile(user.id, user.email);
       
       const newProject = {
         name,
@@ -127,10 +132,13 @@ export default function DashboardPage() {
         .select()
         .single();
         
-      if (error) throw error;
+      if (error) {
+        console.error('Project creation error:', error);
+        throw error;
+      }
       
       if (data) {
-        setProjects(prev => [...prev, data]);
+        setProjects(prev => [data, ...prev]);
         setActiveProject(data);
         setCode(data.code);
         setName("");
@@ -143,6 +151,7 @@ export default function DashboardPage() {
         });
       }
     } catch (error: any) {
+      console.error('Error creating project:', error);
       toast({
         title: "Error creating project",
         description: error.message,
@@ -167,7 +176,7 @@ export default function DashboardPage() {
 
   // Handle file upload (either from drop or file input)
   const handleFileUploadLogic = async (file: File) => {
-    if (!user) return;
+    if (!user || !user.email) return;
     
     // Check if it's a .sol file
     if (!file.name.endsWith('.sol')) {
@@ -183,7 +192,7 @@ export default function DashboardPage() {
     
     try {
       // First ensure the user profile exists
-      await ensureUserProfile(user.id, user.email || '');
+      await ensureUserProfile(user.id, user.email);
       
       // Read file content
       const reader = new FileReader();
@@ -207,10 +216,13 @@ export default function DashboardPage() {
           .select()
           .single();
           
-        if (error) throw error;
+        if (error) {
+          console.error('File import error:', error);
+          throw error;
+        }
         
         if (data) {
-          setProjects(prev => [...prev, data]);
+          setProjects(prev => [data, ...prev]);
           setActiveProject(data);
           setCode(data.code);
           
@@ -223,6 +235,7 @@ export default function DashboardPage() {
       
       reader.readAsText(file);
     } catch (error: any) {
+      console.error('Error importing file:', error);
       toast({
         title: "Error importing file",
         description: error.message,

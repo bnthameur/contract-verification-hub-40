@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User, AuthResponse } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { supabase, ensureUserProfile } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
@@ -27,6 +27,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      
+      // If we have a user, ensure their profile exists
+      if (session?.user && session.user.email) {
+        ensureUserProfile(session.user.id, session.user.email)
+          .catch(error => {
+            console.error('Failed to ensure profile exists:', error);
+            toast({
+              title: 'Profile Error',
+              description: 'Failed to create or update your user profile.',
+              variant: 'destructive',
+            });
+          });
+      }
     });
 
     // Listen for auth changes
@@ -37,19 +50,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         
         // If we have a user, ensure their profile exists
-        if (session?.user) {
-          const { error } = await supabase
-            .from('profiles')
-            .upsert({
-              id: session.user.id,
-              email: session.user.email || '',
-              updated_at: new Date().toISOString(),
-            }, { 
-              onConflict: 'id',
-              ignoreDuplicates: false,
-            });
-            
-          if (error) {
+        if (session?.user && session.user.email) {
+          try {
+            await ensureUserProfile(session.user.id, session.user.email);
+          } catch (error) {
             console.error('Error ensuring user profile exists:', error);
             toast({
               title: 'Profile Error',
@@ -71,15 +75,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string) => {
-    return supabase.auth.signUp({ 
+    const response = await supabase.auth.signUp({ 
       email, 
       password,
       options: {
         data: {
-          email: email, // Store email in user metadata too for profile creation
+          email: email,
         }
       }
     });
+    
+    if (response.data.user) {
+      // Create user profile immediately after signup
+      try {
+        await ensureUserProfile(response.data.user.id, email);
+      } catch (error) {
+        console.error('Failed to create profile after signup:', error);
+      }
+    }
+    
+    return response;
   };
 
   const signOut = async () => {

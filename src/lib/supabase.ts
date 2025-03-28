@@ -17,22 +17,33 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 export const ensureUserProfile = async (userId: string, email: string) => {
   if (!userId || !email) return;
   
-  const { error } = await supabase
-    .from('profiles')
-    .upsert(
-      {
-        id: userId,
-        email: email,
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: 'id',
-        ignoreDuplicates: false,
+  try {
+    // First check if profile exists
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .single();
+      
+    if (!existingProfile) {
+      // Profile doesn't exist, create it
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          email: email,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+        
+      if (insertError) {
+        console.error('Error creating user profile:', insertError);
+        throw insertError;
       }
-    );
-    
-  if (error) {
+    }
+  } catch (error) {
     console.error('Error ensuring user profile exists:', error);
+    throw error;
   }
 };
 
