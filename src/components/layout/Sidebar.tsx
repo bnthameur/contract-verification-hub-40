@@ -15,25 +15,16 @@ interface SidebarProps {
   projects: Project[];
   activeProject?: Project;
   onSelectProject: (project: Project) => void;
-  onCreateProject: (name: string, description: string) => void;
+  onCreateProject: () => void;
 }
 
 export function Sidebar({ projects, activeProject, onSelectProject, onCreateProject }: SidebarProps) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
 
   const filteredProjects = projects.filter((project) =>
     project.name.toLowerCase().includes(search.toLowerCase())
   );
-
-  const handleCreateProject = () => {
-    onCreateProject(name, description);
-    setName("");
-    setDescription("");
-    setOpen(false);
-  };
 
   return (
     <div className="group w-64 border-r px-2 py-4 flex flex-col h-[calc(100vh-4rem)]">
@@ -52,29 +43,12 @@ export function Sidebar({ projects, activeProject, onSelectProject, onCreateProj
                 Create a new Solidity project to verify.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">Project Name</Label>
-                <Input 
-                  id="name" 
-                  placeholder="My Smart Contract" 
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description (Optional)</Label>
-                <Textarea 
-                  id="description" 
-                  placeholder="A brief description of your project"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-              </div>
-            </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreateProject} disabled={!name.trim()}>Create Project</Button>
+              <Button onClick={() => {
+                onCreateProject();
+                setOpen(false);
+              }}>Create Project</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -127,7 +101,7 @@ export function Sidebar({ projects, activeProject, onSelectProject, onCreateProj
                 Create your first project to get started
               </p>
               <Button 
-                onClick={() => setOpen(true)}
+                onClick={onCreateProject}
                 className="gap-1.5"
               >
                 <PlusCircle className="h-4 w-4" />

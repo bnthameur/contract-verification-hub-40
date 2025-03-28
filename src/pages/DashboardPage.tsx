@@ -10,7 +10,7 @@ import { ChevronRight, Save, Upload, FileSymlink, PlusCircle } from "lucide-reac
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureUserProfile } from "@/lib/supabase";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -111,6 +111,9 @@ export default function DashboardPage() {
     if (!user) return;
     
     try {
+      // First ensure the user profile exists
+      await ensureUserProfile(user.id, user.email || '');
+      
       const newProject = {
         name,
         description,
@@ -179,6 +182,9 @@ export default function DashboardPage() {
     setIsUploading(true);
     
     try {
+      // First ensure the user profile exists
+      await ensureUserProfile(user.id, user.email || '');
+      
       // Read file content
       const reader = new FileReader();
       

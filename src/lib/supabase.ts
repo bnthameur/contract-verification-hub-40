@@ -13,6 +13,29 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Create the Supabase client
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
+// Helper function to ensure user profile exists
+export const ensureUserProfile = async (userId: string, email: string) => {
+  if (!userId || !email) return;
+  
+  const { error } = await supabase
+    .from('profiles')
+    .upsert(
+      {
+        id: userId,
+        email: email,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: 'id',
+        ignoreDuplicates: false,
+      }
+    );
+    
+  if (error) {
+    console.error('Error ensuring user profile exists:', error);
+  }
+};
+
 // Show console warning in development if using fallback values
 if (import.meta.env.DEV && (
   !import.meta.env.VITE_SUPABASE_URL || 

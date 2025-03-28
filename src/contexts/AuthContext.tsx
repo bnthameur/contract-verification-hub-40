@@ -1,7 +1,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Session, User, AuthResponse, AuthError } from '@supabase/supabase-js';
+import { Session, User, AuthResponse } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
   user: User | null;
@@ -18,6 +19,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     // Get initial session
@@ -29,10 +31,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        
+        // If we have a user, ensure their profile exists
+        if (session?.user) {
+          const { error } = await supabase
+            .from('profiles')
+            .upsert({
+              id: session.user.id,
+              email: session.user.email || '',
+              updated_at: new Date().toISOString(),
+            }, { 
+              onConflict: 'id',
+              ignoreDuplicates: false,
+            });
+            
+          if (error) {
+            console.error('Error ensuring user profile exists:', error);
+            toast({
+              title: 'Profile Error',
+              description: 'Failed to create or update your user profile.',
+              variant: 'destructive',
+            });
+          }
+        }
       }
     );
 
@@ -46,7 +71,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string) => {
-    return supabase.auth.signUp({ email, password });
+    return supabase.auth.signUp({ 
+      email, 
+      password,
+      options: {
+        data: {
+          email: email, // Store email in user metadata too for profile creation
+        }
+      }
+    });
   };
 
   const signOut = async () => {
