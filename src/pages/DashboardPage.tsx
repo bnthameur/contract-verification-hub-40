@@ -1,4 +1,3 @@
-
 import { Navbar } from "@/components/layout/Navbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MonacoEditor } from "@/components/editor/MonacoEditor";
@@ -30,7 +29,6 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Fetch user's projects
   useEffect(() => {
     if (user) {
       fetchProjects();
@@ -41,9 +39,12 @@ export default function DashboardPage() {
     if (!user) return;
     
     try {
+      console.log('Fetching projects for user:', user.id);
+      
       // First ensure user profile exists
       if (user.email) {
-        await ensureUserProfile(user.id, user.email);
+        const profile = await ensureUserProfile(user.id, user.email);
+        console.log('Profile confirmed before fetching projects:', profile);
       }
       
       const { data, error } = await supabase
@@ -52,7 +53,12 @@ export default function DashboardPage() {
         .eq('user_id', user.id)
         .order('updated_at', { ascending: false });
         
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching projects:', error);
+        throw error;
+      }
+      
+      console.log('Projects fetched:', data);
       
       if (data) {
         setProjects(data);
@@ -62,6 +68,7 @@ export default function DashboardPage() {
         }
       }
     } catch (error: any) {
+      console.error('Error in fetchProjects:', error);
       toast({
         title: "Error fetching projects",
         description: error.message,
@@ -70,11 +77,12 @@ export default function DashboardPage() {
     }
   };
 
-  // Save code changes to active project
   const handleSaveCode = async () => {
     if (!activeProject || !user) return;
     
     try {
+      console.log('Saving code for project:', activeProject.id);
+      
       const { error } = await supabase
         .from('projects')
         .update({
@@ -84,7 +92,10 @@ export default function DashboardPage() {
         .eq('id', activeProject.id)
         .eq('user_id', user.id);
         
-      if (error) throw error;
+      if (error) {
+        console.error('Error saving project:', error);
+        throw error;
+      }
       
       // Update local state
       const updatedProject = {
@@ -103,6 +114,7 @@ export default function DashboardPage() {
         description: "Your code changes have been saved.",
       });
     } catch (error: any) {
+      console.error('Error in handleSaveCode:', error);
       toast({
         title: "Error saving project",
         description: error.message,
@@ -111,13 +123,22 @@ export default function DashboardPage() {
     }
   };
 
-  // Create a new project
   const handleCreateProject = async () => {
-    if (!user || !user.email) return;
+    if (!user || !user.email) {
+      toast({
+        title: "Authentication Error",
+        description: "Please sign in to create a project.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
+      console.log('Creating new project for user:', user.id);
+      
       // First ensure the user profile exists
-      await ensureUserProfile(user.id, user.email);
+      const profile = await ensureUserProfile(user.id, user.email);
+      console.log('Profile confirmed before creating project:', profile);
       
       const newProject = {
         name,
@@ -125,6 +146,8 @@ export default function DashboardPage() {
         code: `// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract ${name.replace(/\s+/g, '')} {\n    // Your code here\n}`,
         user_id: user.id,
       };
+      
+      console.log('Creating project with data:', newProject);
       
       const { data, error } = await supabase
         .from('projects')
@@ -138,6 +161,7 @@ export default function DashboardPage() {
       }
       
       if (data) {
+        console.log('Project created successfully:', data);
         setProjects(prev => [data, ...prev]);
         setActiveProject(data);
         setCode(data.code);
@@ -160,7 +184,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Handle file drop for upload
   const handleDrop = useCallback(
     async (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
@@ -174,9 +197,15 @@ export default function DashboardPage() {
     [user]
   );
 
-  // Handle file upload (either from drop or file input)
   const handleFileUploadLogic = async (file: File) => {
-    if (!user || !user.email) return;
+    if (!user || !user.email) {
+      toast({
+        title: "Authentication Error",
+        description: "Please sign in to upload a file.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     // Check if it's a .sol file
     if (!file.name.endsWith('.sol')) {
@@ -191,46 +220,72 @@ export default function DashboardPage() {
     setIsUploading(true);
     
     try {
+      console.log('Uploading file for user:', user.id);
+      
       // First ensure the user profile exists
-      await ensureUserProfile(user.id, user.email);
+      const profile = await ensureUserProfile(user.id, user.email);
+      console.log('Profile confirmed before file upload:', profile);
       
       // Read file content
       const reader = new FileReader();
       
       reader.onload = async (e) => {
-        const fileContent = e.target?.result as string;
-        
-        // Create a new project with the file content
-        const fileName = file.name.replace('.sol', '');
-        
-        const newProject = {
-          name: fileName,
-          description: `Imported from ${file.name}`,
-          code: fileContent,
-          user_id: user.id,
-        };
-        
-        const { data, error } = await supabase
-          .from('projects')
-          .insert(newProject)
-          .select()
-          .single();
+        try {
+          const fileContent = e.target?.result as string;
           
-        if (error) {
-          console.error('File import error:', error);
-          throw error;
-        }
-        
-        if (data) {
-          setProjects(prev => [data, ...prev]);
-          setActiveProject(data);
-          setCode(data.code);
+          // Create a new project with the file content
+          const fileName = file.name.replace('.sol', '');
           
+          const newProject = {
+            name: fileName,
+            description: `Imported from ${file.name}`,
+            code: fileContent,
+            user_id: user.id,
+          };
+          
+          console.log('Creating project from file with data:', newProject);
+          
+          const { data, error } = await supabase
+            .from('projects')
+            .insert(newProject)
+            .select()
+            .single();
+            
+          if (error) {
+            console.error('File import error:', error);
+            throw error;
+          }
+          
+          if (data) {
+            console.log('Project from file created successfully:', data);
+            setProjects(prev => [data, ...prev]);
+            setActiveProject(data);
+            setCode(data.code);
+            
+            toast({
+              title: "File imported",
+              description: `${fileName} has been imported successfully.`,
+            });
+          }
+        } catch (error: any) {
+          console.error('Error in file reader onload:', error);
           toast({
-            title: "File imported",
-            description: `${fileName} has been imported successfully.`,
+            title: "Error importing file",
+            description: error.message,
+            variant: "destructive",
           });
+        } finally {
+          setIsUploading(false);
         }
+      };
+      
+      reader.onerror = () => {
+        setIsUploading(false);
+        toast({
+          title: "Error reading file",
+          description: "Failed to read the uploaded file",
+          variant: "destructive",
+        });
       };
       
       reader.readAsText(file);
@@ -241,12 +296,10 @@ export default function DashboardPage() {
         description: error.message,
         variant: "destructive",
       });
-    } finally {
       setIsUploading(false);
     }
   };
 
-  // Handle file selection from input
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -257,7 +310,6 @@ export default function DashboardPage() {
     event.target.value = '';
   };
 
-  // Simulate verification process
   const handleStartVerification = async (level: VerificationLevel) => {
     if (!activeProject) return;
     
@@ -382,7 +434,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Stop verification
   const handleStopVerification = async () => {
     if (!verificationResult || verificationResult.status !== VerificationStatus.RUNNING) return;
     
@@ -419,7 +470,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Load verification results when switching projects
   useEffect(() => {
     if (activeProject) {
       setCode(activeProject.code);
@@ -450,7 +500,6 @@ export default function DashboardPage() {
     }
   }, [activeProject]);
 
-  // Handle drag events
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(true);
