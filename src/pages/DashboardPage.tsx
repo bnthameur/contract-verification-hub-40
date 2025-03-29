@@ -43,8 +43,22 @@ export default function DashboardPage() {
       
       // First ensure user profile exists
       if (user.email) {
+        console.log('Ensuring profile exists before fetching projects');
         const profile = await ensureUserProfile(user.id, user.email);
-        console.log('Profile confirmed before fetching projects:', profile);
+        console.log('Profile check result:', profile);
+        
+        if (!profile) {
+          console.error('Failed to ensure profile exists');
+          toast({
+            title: "Error",
+            description: "Could not verify your user profile. Please try signing out and back in.",
+            variant: "destructive",
+          });
+          return;
+        }
+      } else {
+        console.error('No email available for user');
+        return;
       }
       
       const { data, error } = await supabase
@@ -137,7 +151,19 @@ export default function DashboardPage() {
       console.log('Creating new project for user:', user.id);
       
       // First ensure the user profile exists
+      console.log('Ensuring user profile exists before creating project');
       const profile = await ensureUserProfile(user.id, user.email);
+      
+      if (!profile) {
+        console.error('Failed to ensure profile exists');
+        toast({
+          title: "Profile Error",
+          description: "Could not create or verify your user profile. Please try signing out and back in.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       console.log('Profile confirmed before creating project:', profile);
       
       const newProject = {
@@ -145,6 +171,8 @@ export default function DashboardPage() {
         description,
         code: `// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ncontract ${name.replace(/\s+/g, '')} {\n    // Your code here\n}`,
         user_id: user.id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
       
       console.log('Creating project with data:', newProject);
@@ -223,7 +251,20 @@ export default function DashboardPage() {
       console.log('Uploading file for user:', user.id);
       
       // First ensure the user profile exists
+      console.log('Ensuring profile exists before file upload');
       const profile = await ensureUserProfile(user.id, user.email);
+      
+      if (!profile) {
+        console.error('Failed to ensure profile exists for file upload');
+        toast({
+          title: "Profile Error",
+          description: "Could not create or verify your user profile. Please try signing out and back in.",
+          variant: "destructive",
+        });
+        setIsUploading(false);
+        return;
+      }
+      
       console.log('Profile confirmed before file upload:', profile);
       
       // Read file content
@@ -241,6 +282,8 @@ export default function DashboardPage() {
             description: `Imported from ${file.name}`,
             code: fileContent,
             user_id: user.id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           };
           
           console.log('Creating project from file with data:', newProject);
@@ -520,6 +563,7 @@ export default function DashboardPage() {
           activeProject={activeProject} 
           onSelectProject={setActiveProject}
           onCreateProject={() => setOpen(true)}
+          onRefreshProjects={fetchProjects}
         />
         
         <main className="flex-1 flex flex-col overflow-hidden">

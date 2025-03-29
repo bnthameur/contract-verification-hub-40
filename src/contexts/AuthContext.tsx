@@ -23,12 +23,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Create or update user profile
   const setupProfile = async (userId: string, email: string) => {
-    if (!userId || !email) return;
+    if (!userId || !email) return null;
     
     try {
       console.log('Setting up profile for user:', userId, email);
       const profile = await ensureUserProfile(userId, email);
       console.log('Profile setup complete:', profile);
+      
+      if (!profile) {
+        toast({
+          title: 'Profile Error',
+          description: 'Failed to create or update your user profile. Please try signing out and back in.',
+          variant: 'destructive',
+        });
+      }
+      
       return profile;
     } catch (error) {
       console.error('Failed to setup profile:', error);
@@ -37,24 +46,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: 'Failed to create or update your user profile. Please try signing out and back in.',
         variant: 'destructive',
       });
-      throw error;
+      return null;
     }
   };
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       
       // If we have a user, ensure their profile exists
       if (session?.user && session.user.email) {
-        setupProfile(session.user.id, session.user.email)
-          .then(() => setLoading(false))
-          .catch(() => setLoading(false));
-      } else {
-        setLoading(false);
+        try {
+          await setupProfile(session.user.id, session.user.email);
+        } catch (error) {
+          console.error('Error setting up profile during init:', error);
+        }
       }
+      
+      setLoading(false);
     });
 
     // Listen for auth changes

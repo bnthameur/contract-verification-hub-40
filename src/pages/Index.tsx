@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/layout/Navbar";
 import { ShieldCheck, Code, FileCheck, Zap, Layers, ChevronRight, GithubIcon } from "lucide-react";
@@ -54,10 +53,18 @@ export default function Index() {
                 
                 <div className="relative flex justify-center animate-fade-in-up" style={{ animationDelay: "0.3s" }}>
                   <div className="relative w-full max-w-lg">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/50 to-purple-500/50 rounded-xl blur-xl opacity-50 animate-pulse-slow" />
-                    <div className="glass-card rounded-xl p-6 relative h-[400px] overflow-hidden">
-                      <pre className="text-xs sm:text-sm text-left overflow-hidden h-full">
-                        <code className="language-solidity">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/50 to-purple-500/50 rounded-xl blur-lg opacity-50 animate-pulse"></div>
+                    <div className="relative rounded-xl overflow-hidden shadow-xl border border-white/10 backdrop-blur-sm">
+                      <div className="flex items-center gap-2 px-4 py-2 bg-black/90 dark:bg-black/80">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                          <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                          <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        </div>
+                        <span className="text-xs text-gray-400">VerifiableToken.sol</span>
+                      </div>
+                      <pre className="text-xs sm:text-sm text-left p-4 max-h-[400px] overflow-auto bg-zinc-900 dark:bg-black/90">
+                        <code className="language-solidity text-white">
 {`// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
