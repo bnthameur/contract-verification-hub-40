@@ -10,13 +10,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, Settings, User } from "lucide-react"; // Added these icons for better UI
+import { LogOut, Settings, User } from "lucide-react";
 
 export function UserNav({ user }: { user: { email: string; avatar_url?: string } }) {
-  const navigate = useNavigate();
   const { signOut } = useAuth();
   const { toast } = useToast();
   const initials = user.email.charAt(0).toUpperCase();
@@ -24,13 +22,14 @@ export function UserNav({ user }: { user: { email: string; avatar_url?: string }
   const handleLogout = async () => {
     try {
       await signOut();
-      // Force navigation to auth page
-      window.location.href = "/auth"; // Using direct location change instead of navigate for a complete reset
       
       toast({
         title: "Logged Out",
         description: "You have been successfully logged out.",
       });
+      
+      // Force a full page reload to reset all app state
+      window.location.href = "/auth";
     } catch (error) {
       console.error("Logout failed:", error);
       toast({

@@ -1,15 +1,15 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Session, User, AuthResponse } from '@supabase/supabase-js';
-import { supabase, ensureUserProfile } from '@/lib/supabase';
+import { Session, User } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<AuthResponse>;
-  signUp: (email: string, password: string) => Promise<AuthResponse>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -21,87 +21,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // Create or update user profile
-  const setupProfile = async (userId: string, email: string) => {
-    if (!userId || !email) return null;
-    
-    try {
-      console.log('Setting up profile for user:', userId, email);
-      const profile = await ensureUserProfile(userId, email);
-      console.log('Profile setup complete:', profile);
-      
-      if (!profile) {
-        toast({
-          title: 'Profile Error',
-          description: 'Failed to create or update your user profile. Please try signing out and back in.',
-          variant: 'destructive',
-        });
-      }
-      
-      return profile;
-    } catch (error) {
-      console.error('Failed to setup profile:', error);
-      toast({
-        title: 'Profile Error',
-        description: 'Failed to create or update your user profile. Please try signing out and back in.',
-        variant: 'destructive',
-      });
-      return null;
-    }
-  };
-
+  // Initialize auth and set up listeners
   useEffect(() => {
+    // Get initial session
     const initAuth = async () => {
       try {
-        setLoading(true);
-        // Get initial session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('Error getting session:', sessionError);
-          setLoading(false);
-          return;
-        }
-        
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        // If we have a user, ensure their profile exists
-        if (session?.user && session.user.email) {
-          try {
-            await setupProfile(session.user.id, session.user.email);
-          } catch (error) {
-            console.error('Error setting up profile during init:', error);
-          }
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+        } else {
+          setSession(data.session);
+          setUser(data.session?.user ?? null);
         }
       } catch (error) {
-        console.error('Error during auth initialization:', error);
+        console.error('Auth initialization error:', error);
       } finally {
-        // Always set loading to false when done, regardless of success or error
         setLoading(false);
       }
     };
 
-    // Initialize auth
     initAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        console.log('Auth state changed:', _event, session?.user?.id);
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        // If we have a user, ensure their profile exists
-        if (session?.user && session.user.email) {
-          try {
-            await setupProfile(session.user.id, session.user.email);
-          } catch (error) {
-            console.error('Error in auth state change:', error);
-          }
-        }
-        
-        // Always update loading state when auth state changes
+      async (event, newSession) => {
+        console.log('Auth state changed:', event, newSession?.user?.id);
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
         setLoading(false);
       }
     );
@@ -111,122 +57,92 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Simplified signIn function
   const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
-      const response = await supabase.auth.signInWithPassword({ email, password });
-      
-      if (response.error) {
-        console.error('Sign in error:', response.error);
-        toast({
-          title: "Authentication Error",
-          description: response.error.message,
-          variant: "destructive",
-        });
-        return response;
-      }
-      
-      if (response.data.user && response.data.session) {
-        try {
-          await setupProfile(response.data.user.id, email);
-        } catch (error) {
-          console.error('Error during profile setup after sign in:', error);
-        }
-      }
-      
-      return response;
-    } catch (error) {
-      console.error('Unexpected error during sign in:', error);
-      toast({
-        title: "Authentication Error",
-        description: "An unexpected error occurred during sign in",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const signUp = async (email: string, password: string) => {
-    try {
-      setLoading(true);
-      const response = await supabase.auth.signUp({ 
-        email, 
-        password,
-        options: {
-          data: {
-            email: email,
-          }
-        }
-      });
-      
-      if (response.error) {
-        console.error('Sign up error:', response.error);
-        toast({
-          title: "Registration Error",
-          description: response.error.message,
-          variant: "destructive",
-        });
-        return response;
-      }
-      
-      if (response.data.user) {
-        try {
-          // This will create the profile immediately rather than waiting for confirmation
-          await setupProfile(response.data.user.id, email);
-        } catch (error) {
-          console.error('Failed to create profile after signup:', error);
-        }
-        
-        if (!response.data.session) {
-          toast({
-            title: "Verification Required",
-            description: "Please check your email to verify your account before signing in.",
-          });
-        }
-      }
-      
-      return response;
-    } catch (error) {
-      console.error('Unexpected error during sign up:', error);
-      toast({
-        title: "Registration Error",
-        description: "An unexpected error occurred during registration",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const signOut = async () => {
-    try {
-      setLoading(true);
-      const { error } = await supabase.auth.signOut();
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
-        console.error('Error signing out:', error);
         toast({
-          title: "Sign Out Error",
-          description: "Failed to sign out properly: " + error.message,
+          title: "Authentication Error",
+          description: error.message,
           variant: "destructive",
         });
         return;
       }
       
-      // Clear user and session state manually to ensure UI updates
-      setUser(null);
-      setSession(null);
-      
+      // Success toast
       toast({
-        title: "Signed Out",
-        description: "You have been successfully signed out",
+        title: "Welcome back!",
+        description: "You have successfully signed in.",
       });
       
     } catch (error: any) {
-      console.error('Error signing out:', error);
+      console.error('Sign in error:', error);
+      toast({
+        title: "Authentication Error",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Simplified signUp function
+  const signUp = async (email: string, password: string) => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      
+      if (error) {
+        toast({
+          title: "Registration Error",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (!data.session) {
+        toast({
+          title: "Verification Required",
+          description: "Please check your email to verify your account before signing in.",
+        });
+      } else {
+        toast({
+          title: "Welcome!",
+          description: "Your account has been created successfully.",
+        });
+      }
+      
+    } catch (error: any) {
+      console.error('Sign up error:', error);
+      toast({
+        title: "Registration Error",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Improved signOut function
+  const signOut = async () => {
+    try {
+      setLoading(true);
+      await supabase.auth.signOut();
+      
+      // Manually reset state
+      setUser(null);
+      setSession(null);
+      
+      // We'll let UserNav handle the toast and navigation
+      
+    } catch (error: any) {
+      console.error('Sign out error:', error);
       toast({
         title: "Sign Out Error",
         description: "Failed to sign out properly",

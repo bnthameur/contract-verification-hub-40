@@ -15,16 +15,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const queryClient = new QueryClient();
 
-// Protected route component moved inside BrowserRouter and AuthProvider context
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ThemeProvider defaultTheme="light">
           <TooltipProvider>
-            <Toaster />
-            <Sonner />
             <AuthProvider>
+              <Toaster />
+              <Sonner />
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<AuthPage />} />
@@ -46,7 +45,7 @@ const App = () => {
   );
 };
 
-// Protected route component definition moved below App component
+// Protected route component 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
 
