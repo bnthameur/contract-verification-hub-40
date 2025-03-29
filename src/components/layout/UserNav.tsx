@@ -13,6 +13,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { LogOut, Settings, User } from "lucide-react"; // Added these icons for better UI
 
 export function UserNav({ user }: { user: { email: string; avatar_url?: string } }) {
   const navigate = useNavigate();
@@ -23,7 +24,13 @@ export function UserNav({ user }: { user: { email: string; avatar_url?: string }
   const handleLogout = async () => {
     try {
       await signOut();
-      navigate("/auth");
+      // Force navigation to auth page
+      window.location.href = "/auth"; // Using direct location change instead of navigate for a complete reset
+      
+      toast({
+        title: "Logged Out",
+        description: "You have been successfully logged out.",
+      });
     } catch (error) {
       console.error("Logout failed:", error);
       toast({
@@ -54,11 +61,20 @@ export function UserNav({ user }: { user: { email: string; avatar_url?: string }
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>Profile</DropdownMenuItem>
-          <DropdownMenuItem>Settings</DropdownMenuItem>
+          <DropdownMenuItem>
+            <User className="mr-2 h-4 w-4" />
+            <span>Profile</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem>
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Settings</span>
+          </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout}>Log out</DropdownMenuItem>
+        <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>Log out</span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
