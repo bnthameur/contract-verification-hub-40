@@ -12,15 +12,26 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 export function UserNav({ user }: { user: { email: string; avatar_url?: string } }) {
   const navigate = useNavigate();
   const { signOut } = useAuth();
+  const { toast } = useToast();
   const initials = user.email.charAt(0).toUpperCase();
 
   const handleLogout = async () => {
-    await signOut();
-    navigate("/auth");
+    try {
+      await signOut();
+      navigate("/auth");
+    } catch (error) {
+      console.error("Logout failed:", error);
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

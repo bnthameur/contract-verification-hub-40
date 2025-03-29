@@ -53,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initAuth = async () => {
       try {
+        setLoading(true);
         // Get initial session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
@@ -203,8 +204,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       setLoading(true);
-      await supabase.auth.signOut();
-    } catch (error) {
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Error signing out:', error);
+        toast({
+          title: "Sign Out Error",
+          description: "Failed to sign out properly: " + error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Clear user and session state manually to ensure UI updates
+      setUser(null);
+      setSession(null);
+      
+      toast({
+        title: "Signed Out",
+        description: "You have been successfully signed out",
+      });
+      
+    } catch (error: any) {
       console.error('Error signing out:', error);
       toast({
         title: "Sign Out Error",

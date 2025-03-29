@@ -103,7 +103,7 @@ export const ensureUserProfile = async (userId: string, email: string) => {
         continue;
       }
       
-      return null;
+      throw error; // Re-throw the error after all retries fail
     }
   }
   
