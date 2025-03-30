@@ -3,6 +3,25 @@ import { useEffect, useRef, useState } from "react";
 import * as monaco from "monaco-editor";
 import { useTheme } from "@/hooks/use-theme";
 
+// Setup Monaco Environment to work with web workers properly
+self.MonacoEnvironment = {
+  getWorkerUrl: function (_moduleId: string, label: string) {
+    if (label === 'json') {
+      return './json.worker.js';
+    }
+    if (label === 'css' || label === 'scss' || label === 'less') {
+      return './css.worker.js';
+    }
+    if (label === 'html' || label === 'handlebars' || label === 'razor') {
+      return './html.worker.js';
+    }
+    if (label === 'typescript' || label === 'javascript') {
+      return './ts.worker.js';
+    }
+    return './editor.worker.js';
+  }
+};
+
 // This is just a mock for the current example, in a real app we'd use actual Solidity syntax
 const SOLIDITY_EXAMPLE = `
 // SPDX-License-Identifier: MIT
@@ -33,12 +52,48 @@ export function MonacoEditor({ value = SOLIDITY_EXAMPLE, onChange, height = "70v
   const { theme } = useTheme();
   const [isEditorReady, setIsEditorReady] = useState(false);
 
+  // Register Solidity language if not registered
+  useEffect(() => {
+    if (!monaco.languages.getLanguages().some(lang => lang.id === 'sol')) {
+      monaco.languages.register({ id: 'sol' });
+      
+      // Basic Solidity tokenization rules - this is simplified
+      monaco.languages.setMonarchTokensProvider('sol', {
+        tokenizer: {
+          root: [
+            [/\/\/.*$/, 'comment'],
+            [/\/\*/, 'comment', '@comment'],
+            [/\b(contract|function|public|private|return|uint256|address|mapping|struct|enum|event|modifier|emit|require|revert|assert|if|else|for|while|do|break|continue|returns|view|pure|payable|external|internal|storage|memory|calldata|constant|immutable|library|interface|pragma|solidity|import|using|is|new|delete|this|var|let|const)\b/, 'keyword'],
+            [/\b(true|false)\b/, 'boolean'],
+            [/\b(0x[a-fA-F0-9]+)\b/, 'number.hex'],
+            [/\b([0-9]+)\b/, 'number'],
+            [/"([^"\\]|\\.)*$/, 'string.invalid'], // non-terminated string
+            [/"/, { token: 'string.quote', bracket: '@open', next: '@string' }],
+            [/[{}()\[\]]/, '@brackets'],
+            [/[<>](?!@symbols)/, '@brackets'],
+            [/[;,.]/, 'delimiter'],
+          ],
+          string: [
+            [/[^\\"]+/, 'string'],
+            [/\\./, 'string.escape'],
+            [/"/, { token: 'string.quote', bracket: '@close', next: '@pop' }]
+          ],
+          comment: [
+            [/[^/*]+/, 'comment'],
+            [/\*\//, 'comment', '@pop'],
+            [/[/*]/, 'comment']
+          ],
+        }
+      });
+    }
+  }, []);
+
   useEffect(() => {
     if (editorRef.current && !monacoRef.current) {
       // Setup editor
       monacoRef.current = monaco.editor.create(editorRef.current, {
         value,
-        language: "sol", // This would normally be registered with proper highlighting
+        language: "sol",
         theme: theme === "dark" ? "vs-dark" : "vs-light",
         automaticLayout: true,
         minimap: { enabled: true },
