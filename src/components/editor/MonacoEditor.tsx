@@ -2,23 +2,28 @@
 import { useEffect, useRef, useState } from "react";
 import * as monaco from "monaco-editor";
 import { useTheme } from "@/hooks/use-theme";
+import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
+import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
+import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
+import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 
 // Setup Monaco Environment to work with web workers properly
 self.MonacoEnvironment = {
-  getWorkerUrl: function (_moduleId: string, label: string) {
+  getWorker(_, label) {
     if (label === 'json') {
-      return './json.worker.js';
+      return new jsonWorker();
     }
     if (label === 'css' || label === 'scss' || label === 'less') {
-      return './css.worker.js';
+      return new cssWorker();
     }
     if (label === 'html' || label === 'handlebars' || label === 'razor') {
-      return './html.worker.js';
+      return new htmlWorker();
     }
     if (label === 'typescript' || label === 'javascript') {
-      return './ts.worker.js';
+      return new tsWorker();
     }
-    return './editor.worker.js';
+    return new editorWorker();
   }
 };
 
