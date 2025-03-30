@@ -90,7 +90,6 @@ export default function DashboardPage() {
         throw error;
       }
       
-      // Update local state
       const updatedProject = {
         ...activeProject,
         code,
@@ -196,7 +195,6 @@ export default function DashboardPage() {
       return;
     }
     
-    // Check if it's a .sol file
     if (!file.name.endsWith('.sol')) {
       toast({
         title: "Invalid file",
@@ -211,14 +209,12 @@ export default function DashboardPage() {
     try {
       console.log('Uploading file for user:', user.id);
       
-      // Read file content
       const reader = new FileReader();
       
       reader.onload = async (e) => {
         try {
           const fileContent = e.target?.result as string;
           
-          // Create a new project with the file content
           const fileName = file.name.replace('.sol', '');
           
           const newProject = {
@@ -293,7 +289,6 @@ export default function DashboardPage() {
     
     await handleFileUploadLogic(file);
     
-    // Reset the input
     event.target.value = '';
   };
 
@@ -301,7 +296,6 @@ export default function DashboardPage() {
     if (!activeProject) return;
     
     try {
-      // Create a new verification result
       const newResult: VerificationResult = {
         id: crypto.randomUUID(),
         project_id: activeProject.id,
@@ -323,7 +317,6 @@ export default function DashboardPage() {
       if (data) {
         setVerificationResult(data);
         
-        // Simulate verification steps with delays
         const steps = [
           "Parsing Solidity code...",
           "Analyzing contract structure...",
@@ -336,7 +329,6 @@ export default function DashboardPage() {
           "Finalizing results..."
         ];
         
-        // Sample issues based on the code (for demonstration)
         const sampleIssues: VerificationIssue[] = [
           {
             type: "warning",
@@ -352,7 +344,6 @@ export default function DashboardPage() {
           }
         ];
         
-        // If we're using the medium level, add a more complex issue
         if (level === VerificationLevel.MEDIUM) {
           sampleIssues.push({
             type: "error",
@@ -363,7 +354,6 @@ export default function DashboardPage() {
           });
         }
         
-        // Simulate the verification steps with delays
         for (let i = 0; i < steps.length; i++) {
           await new Promise(resolve => setTimeout(resolve, 1000));
           
@@ -385,7 +375,6 @@ export default function DashboardPage() {
           });
         }
         
-        // Complete the verification
         const { error: updateError } = await supabase
           .from('verification_results')
           .update({
@@ -460,10 +449,8 @@ export default function DashboardPage() {
   useEffect(() => {
     if (activeProject) {
       setCode(activeProject.code);
-      // Reset verification result when switching projects
       setVerificationResult(undefined);
       
-      // If there are existing verification results, fetch the latest one
       const fetchVerificationResults = async () => {
         try {
           const { data, error } = await supabase
@@ -617,6 +604,7 @@ export default function DashboardPage() {
         open={isCreatingProject} 
         onOpenChange={setIsCreatingProject}
         onCreateProject={handleCreateProject}
+        onFileUpload={handleFileUploadLogic}
       />
     </div>
   );
