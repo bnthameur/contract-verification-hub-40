@@ -178,25 +178,44 @@ export function MonacoEditor({ value = SOLIDITY_EXAMPLE, onChange, height = "70v
         }
       });
       
-      // Register Solidity completion provider
+      // Register Solidity completion provider with correct range property
       monaco.languages.registerCompletionItemProvider('sol', {
-        provideCompletionItems: (model, position) => {
-          const suggestions = [
-            ...SOLIDITY_KEYWORDS.map(keyword => ({
-              label: keyword,
-              kind: monaco.languages.CompletionItemKind.Keyword,
-              insertText: keyword
-            })),
-            ...SOLIDITY_TYPES.map(type => ({
-              label: type,
-              kind: monaco.languages.CompletionItemKind.TypeParameter,
-              insertText: type
-            })),
-            ...SOLIDITY_SNIPPETS
-          ];
+        provideCompletionItems: (model, position, context, token) => {
+          // Get the word at the current position
+          const wordInfo = model.getWordUntilPosition(position);
+          const wordRange = new monaco.Range(
+            position.lineNumber,
+            wordInfo.startColumn,
+            position.lineNumber,
+            wordInfo.endColumn
+          );
+          
+          // Create suggestions with the required range property
+          const keywordSuggestions = SOLIDITY_KEYWORDS.map(keyword => ({
+            label: keyword,
+            kind: monaco.languages.CompletionItemKind.Keyword,
+            insertText: keyword,
+            range: wordRange
+          }));
+          
+          const typeSuggestions = SOLIDITY_TYPES.map(type => ({
+            label: type,
+            kind: monaco.languages.CompletionItemKind.TypeParameter,
+            insertText: type,
+            range: wordRange
+          }));
+          
+          const snippetSuggestions = SOLIDITY_SNIPPETS.map(snippet => ({
+            ...snippet,
+            range: wordRange
+          }));
           
           return {
-            suggestions
+            suggestions: [
+              ...keywordSuggestions,
+              ...typeSuggestions,
+              ...snippetSuggestions
+            ]
           };
         }
       });
