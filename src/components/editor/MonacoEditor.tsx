@@ -45,6 +45,92 @@ contract SimpleStorage {
 }
 `;
 
+// Solidity keywords and built-in types for syntax highlighting and autocompletion
+const SOLIDITY_KEYWORDS = [
+  'pragma', 'solidity', 'contract', 'library', 'interface', 'function', 'event', 'modifier',
+  'constructor', 'public', 'private', 'internal', 'external', 'view', 'pure', 'payable',
+  'virtual', 'override', 'returns', 'return', 'if', 'else', 'for', 'while', 'do', 'break',
+  'continue', 'throw', 'emit', 'assembly', 'require', 'revert', 'assert', 'memory', 'storage',
+  'calldata', 'constant', 'immutable', 'import', 'using', 'struct', 'enum', 'mapping', 'is', 'new',
+  'delete', 'try', 'catch', 'this', 'super', 'type'
+];
+
+const SOLIDITY_TYPES = [
+  'address', 'bool', 'string', 'bytes', 'bytes1', 'bytes2', 'bytes3', 'bytes4', 'bytes5',
+  'bytes6', 'bytes7', 'bytes8', 'bytes9', 'bytes10', 'bytes11', 'bytes12', 'bytes13',
+  'bytes14', 'bytes15', 'bytes16', 'bytes17', 'bytes18', 'bytes19', 'bytes20', 'bytes21',
+  'bytes22', 'bytes23', 'bytes24', 'bytes25', 'bytes26', 'bytes27', 'bytes28', 'bytes29',
+  'bytes30', 'bytes31', 'bytes32', 'int', 'int8', 'int16', 'int24', 'int32', 'int40',
+  'int48', 'int56', 'int64', 'int72', 'int80', 'int88', 'int96', 'int104', 'int112',
+  'int120', 'int128', 'int136', 'int144', 'int152', 'int160', 'int168', 'int176', 'int184',
+  'int192', 'int200', 'int208', 'int216', 'int224', 'int232', 'int240', 'int248', 'int256',
+  'uint', 'uint8', 'uint16', 'uint24', 'uint32', 'uint40', 'uint48', 'uint56', 'uint64', 
+  'uint72', 'uint80', 'uint88', 'uint96', 'uint104', 'uint112', 'uint120', 'uint128', 
+  'uint136', 'uint144', 'uint152', 'uint160', 'uint168', 'uint176', 'uint184', 'uint192', 
+  'uint200', 'uint208', 'uint216', 'uint224', 'uint232', 'uint240', 'uint248', 'uint256',
+  'fixed', 'ufixed', 'wei', 'gwei', 'ether', 'seconds', 'minutes', 'hours', 'days', 'weeks'
+];
+
+// Common Solidity snippets for autocompletion
+const SOLIDITY_SNIPPETS = [
+  {
+    label: 'contract',
+    kind: monaco.languages.CompletionItemKind.Snippet,
+    insertText: 'contract ${1:Name} {\n\t$0\n}',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    documentation: 'Contract definition'
+  },
+  {
+    label: 'function',
+    kind: monaco.languages.CompletionItemKind.Snippet,
+    insertText: 'function ${1:name}(${2:params}) ${3:visibility} ${4:modifiers} returns (${5:return type}) {\n\t$0\n}',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    documentation: 'Function definition'
+  },
+  {
+    label: 'constructor',
+    kind: monaco.languages.CompletionItemKind.Snippet,
+    insertText: 'constructor(${1:params}) ${2:visibility} {\n\t$0\n}',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    documentation: 'Constructor definition'
+  },
+  {
+    label: 'event',
+    kind: monaco.languages.CompletionItemKind.Snippet,
+    insertText: 'event ${1:Name}(${2:params});',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    documentation: 'Event definition'
+  },
+  {
+    label: 'modifier',
+    kind: monaco.languages.CompletionItemKind.Snippet,
+    insertText: 'modifier ${1:name}(${2:params}) {\n\t_;\n\t$0\n}',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    documentation: 'Modifier definition'
+  },
+  {
+    label: 'require',
+    kind: monaco.languages.CompletionItemKind.Snippet,
+    insertText: 'require(${1:condition}, "${2:error message}");',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    documentation: 'Require statement'
+  },
+  {
+    label: 'mapping',
+    kind: monaco.languages.CompletionItemKind.Snippet,
+    insertText: 'mapping(${1:key} => ${2:value}) ${3:visibility} ${4:name};',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    documentation: 'Mapping definition'
+  },
+  {
+    label: 'struct',
+    kind: monaco.languages.CompletionItemKind.Snippet,
+    insertText: 'struct ${1:Name} {\n\t${2:type} ${3:name};\n\t$0\n}',
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+    documentation: 'Struct definition'
+  }
+];
+
 interface MonacoEditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -62,13 +148,14 @@ export function MonacoEditor({ value = SOLIDITY_EXAMPLE, onChange, height = "70v
     if (!monaco.languages.getLanguages().some(lang => lang.id === 'sol')) {
       monaco.languages.register({ id: 'sol' });
       
-      // Basic Solidity tokenization rules - this is simplified
+      // Enhanced Solidity tokenization rules
       monaco.languages.setMonarchTokensProvider('sol', {
         tokenizer: {
           root: [
             [/\/\/.*$/, 'comment'],
             [/\/\*/, 'comment', '@comment'],
-            [/\b(contract|function|public|private|return|uint256|address|mapping|struct|enum|event|modifier|emit|require|revert|assert|if|else|for|while|do|break|continue|returns|view|pure|payable|external|internal|storage|memory|calldata|constant|immutable|library|interface|pragma|solidity|import|using|is|new|delete|this|var|let|const)\b/, 'keyword'],
+            [new RegExp(`\\b(${SOLIDITY_KEYWORDS.join('|')})\\b`), 'keyword'],
+            [new RegExp(`\\b(${SOLIDITY_TYPES.join('|')})\\b`), 'type'],
             [/\b(true|false)\b/, 'boolean'],
             [/\b(0x[a-fA-F0-9]+)\b/, 'number.hex'],
             [/\b([0-9]+)\b/, 'number'],
@@ -90,6 +177,80 @@ export function MonacoEditor({ value = SOLIDITY_EXAMPLE, onChange, height = "70v
           ],
         }
       });
+      
+      // Register Solidity completion provider
+      monaco.languages.registerCompletionItemProvider('sol', {
+        provideCompletionItems: (model, position) => {
+          const suggestions = [
+            ...SOLIDITY_KEYWORDS.map(keyword => ({
+              label: keyword,
+              kind: monaco.languages.CompletionItemKind.Keyword,
+              insertText: keyword
+            })),
+            ...SOLIDITY_TYPES.map(type => ({
+              label: type,
+              kind: monaco.languages.CompletionItemKind.TypeParameter,
+              insertText: type
+            })),
+            ...SOLIDITY_SNIPPETS
+          ];
+          
+          return {
+            suggestions
+          };
+        }
+      });
+      
+      // Add basic hover provider
+      monaco.languages.registerHoverProvider('sol', {
+        provideHover: (model, position) => {
+          const word = model.getWordAtPosition(position);
+          if (!word) return null;
+          
+          const keyword = SOLIDITY_KEYWORDS.find(k => k === word.word);
+          const type = SOLIDITY_TYPES.find(t => t === word.word);
+          
+          let contents = [];
+          
+          if (keyword) {
+            contents.push({ value: `**${keyword}** - Solidity keyword` });
+          } else if (type) {
+            contents.push({ value: `**${type}** - Solidity type` });
+            
+            // Add additional info for common types
+            if (type.startsWith('uint')) {
+              contents.push({ value: 'Unsigned integer type' });
+              if (type !== 'uint') {
+                const bits = type.replace('uint', '');
+                contents.push({ value: `${bits} bits unsigned integer` });
+              } else {
+                contents.push({ value: 'Alias for uint256' });
+              }
+            } else if (type.startsWith('int')) {
+              contents.push({ value: 'Signed integer type' });
+              if (type !== 'int') {
+                const bits = type.replace('int', '');
+                contents.push({ value: `${bits} bits signed integer` });
+              } else {
+                contents.push({ value: 'Alias for int256' });
+              }
+            } else if (type === 'address') {
+              contents.push({ value: '20 byte Ethereum address type' });
+            } else if (type === 'bool') {
+              contents.push({ value: 'Boolean value (true or false)' });
+            } else if (type.startsWith('bytes')) {
+              if (type === 'bytes') {
+                contents.push({ value: 'Dynamic byte array' });
+              } else {
+                const size = type.replace('bytes', '');
+                contents.push({ value: `Fixed byte array of ${size} bytes` });
+              }
+            }
+          }
+          
+          return contents.length > 0 ? { contents } : null;
+        }
+      });
     }
   }, []);
 
@@ -108,6 +269,11 @@ export function MonacoEditor({ value = SOLIDITY_EXAMPLE, onChange, height = "70v
         fontSize: 14,
         tabSize: 2,
         lineNumbers: "on",
+        wordWrap: "on",
+        quickSuggestions: true,
+        suggestOnTriggerCharacters: true,
+        formatOnType: true,
+        formatOnPaste: true,
         scrollbar: {
           vertical: "visible",
           horizontal: "visible",

@@ -1,3 +1,4 @@
+
 import { Navbar } from "@/components/layout/Navbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MonacoEditor } from "@/components/editor/MonacoEditor";
@@ -9,7 +10,7 @@ import { ChevronRight, Save, Upload, FileSymlink, PlusCircle } from "lucide-reac
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, ensureUserProfile } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,26 +41,6 @@ export default function DashboardPage() {
     
     try {
       console.log('Fetching projects for user:', user.id);
-      
-      // First ensure user profile exists
-      if (user.email) {
-        console.log('Ensuring profile exists before fetching projects');
-        const profile = await ensureUserProfile(user.id, user.email);
-        console.log('Profile check result:', profile);
-        
-        if (!profile) {
-          console.error('Failed to ensure profile exists');
-          toast({
-            title: "Error",
-            description: "Could not verify your user profile. Please try signing out and back in.",
-            variant: "destructive",
-          });
-          return;
-        }
-      } else {
-        console.error('No email available for user');
-        return;
-      }
       
       const { data, error } = await supabase
         .from('projects')
@@ -138,7 +119,7 @@ export default function DashboardPage() {
   };
 
   const handleCreateProject = async () => {
-    if (!user || !user.email) {
+    if (!user) {
       toast({
         title: "Authentication Error",
         description: "Please sign in to create a project.",
@@ -149,22 +130,6 @@ export default function DashboardPage() {
     
     try {
       console.log('Creating new project for user:', user.id);
-      
-      // First ensure the user profile exists
-      console.log('Ensuring user profile exists before creating project');
-      const profile = await ensureUserProfile(user.id, user.email);
-      
-      if (!profile) {
-        console.error('Failed to ensure profile exists');
-        toast({
-          title: "Profile Error",
-          description: "Could not create or verify your user profile. Please try signing out and back in.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      console.log('Profile confirmed before creating project:', profile);
       
       const newProject = {
         name,
@@ -226,7 +191,7 @@ export default function DashboardPage() {
   );
 
   const handleFileUploadLogic = async (file: File) => {
-    if (!user || !user.email) {
+    if (!user) {
       toast({
         title: "Authentication Error",
         description: "Please sign in to upload a file.",
@@ -249,23 +214,6 @@ export default function DashboardPage() {
     
     try {
       console.log('Uploading file for user:', user.id);
-      
-      // First ensure the user profile exists
-      console.log('Ensuring profile exists before file upload');
-      const profile = await ensureUserProfile(user.id, user.email);
-      
-      if (!profile) {
-        console.error('Failed to ensure profile exists for file upload');
-        toast({
-          title: "Profile Error",
-          description: "Could not create or verify your user profile. Please try signing out and back in.",
-          variant: "destructive",
-        });
-        setIsUploading(false);
-        return;
-      }
-      
-      console.log('Profile confirmed before file upload:', profile);
       
       // Read file content
       const reader = new FileReader();
