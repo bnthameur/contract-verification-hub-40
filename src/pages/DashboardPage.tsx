@@ -1,4 +1,3 @@
-
 import { Navbar } from "@/components/layout/Navbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MonacoEditor } from "@/components/editor/MonacoEditor";
@@ -6,7 +5,7 @@ import { VerificationPanel } from "@/components/verification/VerificationPanel";
 import { Project, VerificationIssue, VerificationLevel, VerificationResult, VerificationStatus } from "@/types";
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Save, Upload, FileSymlink, PlusCircle } from "lucide-react";
+import { ChevronRight, Save, Upload, FileSymlink, PlusCircle, FileCode } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { LightRay } from "@/components/layout/LightRay";
+import { ProjectCreationDialog } from "@/components/project/ProjectCreationDialog";
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -23,10 +23,8 @@ export default function DashboardPage() {
   const [code, setCode] = useState("");
   const [verificationResult, setVerificationResult] = useState<VerificationResult | undefined>();
   const [isUploading, setIsUploading] = useState(false);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [open, setOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -118,7 +116,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleCreateProject = async () => {
+  const handleCreateProject = async (name: string, description: string) => {
     if (!user) {
       toast({
         title: "Authentication Error",
@@ -158,9 +156,7 @@ export default function DashboardPage() {
         setProjects(prev => [data, ...prev]);
         setActiveProject(data);
         setCode(data.code);
-        setName("");
-        setDescription("");
-        setOpen(false);
+        setIsCreatingProject(false);
         
         toast({
           title: "Project created",
@@ -510,7 +506,7 @@ export default function DashboardPage() {
           projects={projects} 
           activeProject={activeProject} 
           onSelectProject={setActiveProject}
-          onCreateProject={() => setOpen(true)}
+          onCreateProject={() => setIsCreatingProject(true)}
           onRefreshProjects={fetchProjects}
         />
         
@@ -577,49 +573,16 @@ export default function DashboardPage() {
                 </p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Dialog open={open} onOpenChange={setOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="w-full flex items-center justify-center gap-2 p-6 h-auto flex-col">
-                        <PlusCircle className="h-8 w-8 mb-2" />
-                        <div>
-                          <div className="font-medium">Create Project</div>
-                          <div className="text-xs text-muted-foreground">Start from scratch</div>
-                        </div>
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Create New Project</DialogTitle>
-                        <DialogDescription>
-                          Create a new Solidity project to verify.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="name">Project Name</Label>
-                          <Input 
-                            id="name" 
-                            placeholder="My Smart Contract" 
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="description">Description (Optional)</Label>
-                          <Textarea 
-                            id="description" 
-                            placeholder="A brief description of your project"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                        <Button onClick={handleCreateProject} disabled={!name.trim()}>Create Project</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                  <Button 
+                    onClick={() => setIsCreatingProject(true)}
+                    className="w-full flex items-center justify-center gap-2 p-6 h-auto flex-col"
+                  >
+                    <FileCode className="h-8 w-8 mb-2" />
+                    <div>
+                      <div className="font-medium">Create Project</div>
+                      <div className="text-xs text-muted-foreground">Start from scratch</div>
+                    </div>
+                  </Button>
                   
                   <div 
                     className={`w-full bg-muted hover:bg-muted/80 flex items-center justify-center gap-2 p-6 h-full flex-col cursor-pointer border relative ${isDragging ? 'ring-2 ring-primary' : ''}`}
@@ -649,6 +612,12 @@ export default function DashboardPage() {
           )}
         </main>
       </div>
+      
+      <ProjectCreationDialog 
+        open={isCreatingProject} 
+        onOpenChange={setIsCreatingProject}
+        onCreateProject={handleCreateProject}
+      />
     </div>
   );
 }

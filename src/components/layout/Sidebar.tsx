@@ -6,10 +6,6 @@ import { PlusCircle, FolderPlus, Search, MoreHorizontal, Edit, Trash } from "luc
 import { useState } from "react";
 import { Project } from "@/types";
 import { 
-  Dialog, DialogContent, DialogDescription, DialogFooter, 
-  DialogHeader, DialogTitle, DialogTrigger 
-} from "@/components/ui/dialog";
-import { 
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
@@ -19,6 +15,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
+import { 
+  Dialog, DialogContent, DialogDescription, DialogFooter, 
+  DialogHeader, DialogTitle 
+} from "@/components/ui/dialog";
 
 interface SidebarProps {
   projects: Project[];
@@ -36,7 +36,6 @@ export function Sidebar({
   onRefreshProjects 
 }: SidebarProps) {
   const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [newName, setNewName] = useState("");
@@ -124,28 +123,14 @@ export function Sidebar({
     <div className="group w-64 border-r px-2 py-4 flex flex-col h-[calc(100vh-4rem)]">
       <div className="flex items-center justify-between mb-2 px-4">
         <h2 className="text-lg font-semibold">Projects</h2>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Create project">
-              <PlusCircle className="h-5 w-5 text-primary" />
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create New Project</DialogTitle>
-              <DialogDescription>
-                Create a new Solidity project to verify.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={() => {
-                onCreateProject();
-                setOpen(false);
-              }}>Create Project</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          aria-label="Create project"
+          onClick={onCreateProject}
+        >
+          <PlusCircle className="h-5 w-5 text-primary" />
+        </Button>
       </div>
       
       <div className="relative mb-4 px-2">
