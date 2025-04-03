@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -88,26 +87,13 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
       
       const data = await response.json();
       
-      // Update the verification record with results
-      const { error: updateError } = await supabase
-        .from('verification_results')
-        .update({
-          status: VerificationStatus.COMPLETED,
-          results: data.issues,
-          logs: data.logs || verificationRecord.logs,
-          completed_at: new Date().toISOString(),
-        })
-        .eq('id', verificationRecord.id);
-        
-      if (updateError) throw updateError;
+      // Refresh to get updated result - this will trigger a reload of results from Supabase
+      onVerify(level);
       
       toast({
         title: "Verification complete",
-        description: `Found ${data.issues_count} issues.`,
+        description: `Analysis completed with ${data.issues_count || 0} issues found.`,
       });
-      
-      // Refresh to get updated result
-      onVerify(level);
       
     } catch (error: any) {
       console.error("Verification error:", error);
@@ -117,6 +103,18 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
         description: error.message || "An unexpected error occurred",
         variant: "destructive",
       });
+      
+      // Update the verification record as failed if it exists
+      if (result?.id) {
+        await supabase
+          .from('verification_results')
+          .update({
+            status: VerificationStatus.FAILED,
+            logs: [...(result.logs || []), `Error: ${error.message}`],
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', result.id);
+      }
       
     } finally {
       setIsVerifying(false);
