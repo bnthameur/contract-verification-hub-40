@@ -19,7 +19,7 @@ interface VerificationPanelProps {
   result?: VerificationResult;
 }
 
-// Define API URL from environment or default to localhost
+// Define API URL from environment or default to localhost for development
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export function VerificationPanel({ projectId, code, onVerify, onStop, result }: VerificationPanelProps) {
@@ -68,7 +68,8 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
         
       if (insertError) throw insertError;
       
-      // Call the backend API
+      // Call the backend API - use the API_URL constant
+      console.log(`Calling API at: ${API_URL}/analyze`);
       const response = await fetch(`${API_URL}/analyze`, {
         method: 'POST',
         headers: {
