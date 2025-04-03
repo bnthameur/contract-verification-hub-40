@@ -1,3 +1,4 @@
+
 import { Navbar } from "@/components/layout/Navbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MonacoEditor } from "@/components/editor/MonacoEditor";
@@ -10,10 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { LightRay } from "@/components/layout/LightRay";
 import { ProjectCreationDialog } from "@/components/project/ProjectCreationDialog";
 
@@ -58,6 +55,7 @@ export default function DashboardPage() {
         if (data.length > 0 && !activeProject) {
           setActiveProject(data[0]);
           setCode(data[0].code);
+          fetchLatestVerificationResult(data[0].id);
         }
       }
     } catch (error: any) {
@@ -67,6 +65,28 @@ export default function DashboardPage() {
         description: error.message,
         variant: "destructive",
       });
+    }
+  };
+
+  const fetchLatestVerificationResult = async (projectId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('verification_results')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+        
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setVerificationResult(data[0]);
+      } else {
+        setVerificationResult(undefined);
+      }
+    } catch (error: any) {
+      console.error('Error fetching verification result:', error);
+      // We don't show a toast here to avoid cluttering the UI
     }
   };
 
@@ -156,6 +176,7 @@ export default function DashboardPage() {
         setActiveProject(data);
         setCode(data.code);
         setIsCreatingProject(false);
+        setVerificationResult(undefined);
         
         toast({
           title: "Project created",
@@ -244,6 +265,7 @@ export default function DashboardPage() {
             setProjects(prev => [data, ...prev]);
             setActiveProject(data);
             setCode(data.code);
+            setVerificationResult(undefined);
             
             toast({
               title: "File imported",
@@ -293,120 +315,12 @@ export default function DashboardPage() {
   };
 
   const handleStartVerification = async (level: VerificationLevel) => {
-    if (!activeProject) return;
+    // Save any unsaved changes first
+    await handleSaveCode();
     
-    try {
-      const newResult: VerificationResult = {
-        id: crypto.randomUUID(),
-        project_id: activeProject.id,
-        level,
-        status: VerificationStatus.RUNNING,
-        results: [],
-        logs: ["Initializing verification..."],
-        created_at: new Date().toISOString(),
-      };
-      
-      const { data, error } = await supabase
-        .from('verification_results')
-        .insert(newResult)
-        .select()
-        .single();
-        
-      if (error) throw error;
-      
-      if (data) {
-        setVerificationResult(data);
-        
-        const steps = [
-          "Parsing Solidity code...",
-          "Analyzing contract structure...",
-          "Running slither analysis...",
-          "Checking for common vulnerabilities...",
-          "Verifying arithmetic operations...",
-          "Analyzing control flow...",
-          "Checking reentrancy guards...",
-          "Evaluating gas usage...",
-          "Finalizing results..."
-        ];
-        
-        const sampleIssues: VerificationIssue[] = [
-          {
-            type: "warning",
-            message: "Missing input validation: value parameter should be checked for potential overflow",
-            location: { line: 26, column: 28 },
-            code: "function transfer(address to, uint256 value) public returns (bool success) {",
-            severity: "medium"
-          },
-          {
-            type: "info",
-            message: "Consider using SafeMath library for arithmetic operations",
-            severity: "low"
-          }
-        ];
-        
-        if (level === VerificationLevel.MEDIUM) {
-          sampleIssues.push({
-            type: "error",
-            message: "Potential integer overflow in transferFrom function",
-            location: { line: 42, column: 18 },
-            code: "balanceOf[to] += value;",
-            severity: "high"
-          });
-        }
-        
-        for (let i = 0; i < steps.length; i++) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          const { error } = await supabase
-            .from('verification_results')
-            .update({
-              logs: [...data.logs, steps[i]],
-            })
-            .eq('id', data.id);
-            
-          if (error) throw error;
-          
-          setVerificationResult(prev => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              logs: [...prev.logs, steps[i]],
-            };
-          });
-        }
-        
-        const { error: updateError } = await supabase
-          .from('verification_results')
-          .update({
-            status: VerificationStatus.COMPLETED,
-            results: sampleIssues,
-            completed_at: new Date().toISOString(),
-          })
-          .eq('id', data.id);
-          
-        if (updateError) throw updateError;
-        
-        setVerificationResult(prev => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            status: VerificationStatus.COMPLETED,
-            results: sampleIssues,
-            completed_at: new Date().toISOString(),
-          };
-        });
-        
-        toast({
-          title: "Verification complete",
-          description: `Found ${sampleIssues.length} issues.`,
-        });
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error during verification",
-        description: error.message,
-        variant: "destructive",
-      });
+    // Fetch latest verification result
+    if (activeProject) {
+      await fetchLatestVerificationResult(activeProject.id);
     }
   };
 
@@ -449,28 +363,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (activeProject) {
       setCode(activeProject.code);
-      setVerificationResult(undefined);
-      
-      const fetchVerificationResults = async () => {
-        try {
-          const { data, error } = await supabase
-            .from('verification_results')
-            .select('*')
-            .eq('project_id', activeProject.id)
-            .order('created_at', { ascending: false })
-            .limit(1);
-            
-          if (error) throw error;
-          
-          if (data && data.length > 0) {
-            setVerificationResult(data[0]);
-          }
-        } catch (error: any) {
-          console.error('Error fetching verification results:', error);
-        }
-      };
-      
-      fetchVerificationResults();
+      fetchLatestVerificationResult(activeProject.id);
     }
   }, [activeProject]);
 
@@ -554,7 +447,7 @@ export default function DashboardPage() {
               onDrop={handleDrop}
             >
               <div className={`text-center max-w-md p-6 transition-all ${isDragging ? 'scale-105 opacity-70' : ''}`}>
-                <h2 className="text-2xl font-semibold mb-4">Welcome to Formal</h2>
+                <h2 className="text-2xl font-semibold mb-4">Welcome to FormalBase</h2>
                 <p className="text-muted-foreground mb-8">
                   Start by creating a new project or importing a Solidity file
                 </p>
@@ -563,35 +456,33 @@ export default function DashboardPage() {
                   <Button 
                     onClick={() => setIsCreatingProject(true)}
                     className="w-full flex items-center justify-center gap-2 p-6 h-auto flex-col"
+                    variant="outline"
                   >
-                    <FileCode className="h-8 w-8 mb-2" />
-                    <div>
-                      <div className="font-medium">Create Project</div>
-                      <div className="text-xs text-muted-foreground">Start from scratch</div>
-                    </div>
+                    <FileCode className="h-10 w-10 mb-2 text-primary" />
+                    <span>Create New Project</span>
                   </Button>
                   
-                  <div 
-                    className={`w-full bg-muted hover:bg-muted/80 flex items-center justify-center gap-2 p-6 h-full flex-col cursor-pointer border relative ${isDragging ? 'ring-2 ring-primary' : ''}`}
-                  >
-                    <FileSymlink className="h-8 w-8 mb-2" />
-                    <div>
-                      <div className="font-medium">Import File</div>
-                      <div className="text-xs text-muted-foreground">Upload or drop .sol file</div>
-                    </div>
-                    <input 
-                      id="file-upload" 
-                      type="file" 
-                      accept=".sol" 
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  <label>
+                    <input
+                      type="file"
+                      accept=".sol"
                       onChange={handleFileUpload}
                       disabled={isUploading}
+                      className="hidden"
                     />
-                  </div>
+                    <div className={`w-full flex items-center justify-center gap-2 p-6 h-full flex-col cursor-pointer border rounded-md ${isUploading ? 'opacity-70' : 'hover:border-primary hover:text-primary transition-colors'}`}>
+                      <Upload className="h-10 w-10 mb-2 text-primary" />
+                      <span>{isUploading ? 'Uploading...' : 'Upload Solidity File'}</span>
+                    </div>
+                  </label>
                 </div>
+                
                 {isDragging && (
-                  <div className="mt-8 p-4 border border-dashed border-primary rounded-md animate-pulse">
-                    <p className="text-primary font-medium">Drop your .sol file here</p>
+                  <div className="absolute inset-0 border-2 border-dashed border-primary bg-primary/5 flex items-center justify-center rounded-lg z-10">
+                    <div className="text-center">
+                      <FileSymlink className="h-16 w-16 mx-auto mb-4 text-primary" />
+                      <h3 className="text-xl font-medium">Drop your Solidity file here</h3>
+                    </div>
                   </div>
                 )}
               </div>
@@ -600,8 +491,8 @@ export default function DashboardPage() {
         </main>
       </div>
       
-      <ProjectCreationDialog 
-        open={isCreatingProject} 
+      <ProjectCreationDialog
+        open={isCreatingProject}
         onOpenChange={setIsCreatingProject}
         onCreateProject={handleCreateProject}
         onFileUpload={handleFileUploadLogic}

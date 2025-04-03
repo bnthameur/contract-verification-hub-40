@@ -9,6 +9,8 @@ import { CheckCircle, AlertTriangle, XCircle, Play, Loader2, Terminal, Shield, S
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
 interface VerificationPanelProps {
   projectId: string;
@@ -18,10 +20,16 @@ interface VerificationPanelProps {
   result?: VerificationResult;
 }
 
+// Define API URL from environment or default to localhost
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 export function VerificationPanel({ projectId, code, onVerify, onStop, result }: VerificationPanelProps) {
   const [level, setLevel] = useState<VerificationLevel>(VerificationLevel.SIMPLE);
-  const isVerifying = result?.status === VerificationStatus.RUNNING;
+  const [isVerifying, setIsVerifying] = useState(false);
+  const { toast } = useToast();
+  
   const isPending = result?.status === VerificationStatus.PENDING;
+  const isRunning = result?.status === VerificationStatus.RUNNING || isVerifying;
   const isComplete = result?.status === VerificationStatus.COMPLETED;
   const isFailed = result?.status === VerificationStatus.FAILED;
   
@@ -30,14 +38,94 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
   const warningCount = result?.results.filter(issue => issue.type === 'warning').length || 0;
   const infoCount = result?.results.filter(issue => issue.type === 'info').length || 0;
 
-  const handleStartVerification = () => {
-    onVerify(level);
+  const handleStartVerification = async () => {
+    if (!projectId || !code) {
+      toast({
+        title: "Verification failed",
+        description: "Project or code is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsVerifying(true);
+      
+      // Create initial verification record
+      const initialResult: Partial<VerificationResult> = {
+        project_id: projectId,
+        level,
+        status: VerificationStatus.RUNNING,
+        results: [],
+        logs: ["Initializing verification..."],
+        created_at: new Date().toISOString(),
+      };
+      
+      const { data: verificationRecord, error: insertError } = await supabase
+        .from('verification_results')
+        .insert(initialResult)
+        .select()
+        .single();
+        
+      if (insertError) throw insertError;
+      
+      // Call the backend API
+      const response = await fetch(`${API_URL}/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          project_id: projectId,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API Error: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Update the verification record with results
+      const { error: updateError } = await supabase
+        .from('verification_results')
+        .update({
+          status: VerificationStatus.COMPLETED,
+          results: data.issues,
+          logs: data.logs || verificationRecord.logs,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', verificationRecord.id);
+        
+      if (updateError) throw updateError;
+      
+      toast({
+        title: "Verification complete",
+        description: `Found ${data.issues_count} issues.`,
+      });
+      
+      // Refresh to get updated result
+      onVerify(level);
+      
+    } catch (error: any) {
+      console.error("Verification error:", error);
+      
+      toast({
+        title: "Verification failed",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
+      
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
-  const handleStopVerification = () => {
-    if (onStop) {
-      onStop();
-    }
+  const handleStopVerification = async () => {
+    if (!onStop || !result) return;
+    onStop();
   };
 
   return (
@@ -60,7 +148,7 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
             <Select
               value={level}
               onValueChange={(value) => setLevel(value as VerificationLevel)}
-              disabled={isVerifying}
+              disabled={isRunning}
             >
               <SelectTrigger id="verification-level">
                 <SelectValue placeholder="Select level" />
@@ -79,7 +167,7 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
             </Select>
           </div>
 
-          {(isVerifying || isPending) && (
+          {(isRunning || isPending) && (
             <div className="space-y-2 py-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Verification in progress...</span>
@@ -201,7 +289,7 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
         </div>
       </CardContent>
       <CardFooter className="flex gap-2">
-        {isVerifying && onStop && (
+        {isRunning && onStop && (
           <Button 
             onClick={handleStopVerification}
             variant="outline"
@@ -213,10 +301,10 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
         )}
         <Button 
           onClick={handleStartVerification} 
-          disabled={isVerifying}
-          className={isVerifying && onStop ? "flex-1" : "w-full"}
+          disabled={isRunning}
+          className={isRunning && onStop ? "flex-1" : "w-full"}
         >
-          {isVerifying ? (
+          {isRunning ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Verifying...
