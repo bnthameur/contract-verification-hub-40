@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -25,6 +26,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 export function VerificationPanel({ projectId, code, onVerify, onStop, result }: VerificationPanelProps) {
   const [level, setLevel] = useState<VerificationLevel>(VerificationLevel.SIMPLE);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const { toast } = useToast();
   
   const isPending = result?.status === VerificationStatus.PENDING;
@@ -49,6 +51,7 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
 
     try {
       setIsVerifying(true);
+      setApiError(null);
       
       // Create initial verification record
       const initialResult: Partial<VerificationResult> = {
@@ -98,6 +101,7 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
       
     } catch (error: any) {
       console.error("Verification error:", error);
+      setApiError(error.message || "Failed to connect to verification API. Is the backend running?");
       
       toast({
         title: "Verification failed",
@@ -165,6 +169,16 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
               </SelectContent>
             </Select>
           </div>
+
+          {apiError && (
+            <div className="bg-destructive/10 text-destructive p-3 rounded-md text-sm border border-destructive/20">
+              <p className="font-medium">API Error</p>
+              <p className="mt-1">{apiError}</p>
+              <p className="mt-2 text-xs">
+                Make sure the backend API is running at: {API_URL}
+              </p>
+            </div>
+          )}
 
           {(isRunning || isPending) && (
             <div className="space-y-2 py-2">
