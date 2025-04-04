@@ -11,11 +11,11 @@ from typing import List, Dict, Any, Optional, Union
 
 app = FastAPI(title="FormalBase API", description="Smart Contract Verification API")
 
-# Get allowed origins from environment variable or use defaults
-allowed_origins = os.environ.get("ALLOWED_ORIGINS", "https://58efc0c8-52f0-4b94-abcc-024e3f64d36c.lovableproject.com,http://localhost:8080")
-origins = [origin.strip() for origin in allowed_origins.split(",")]
+# Get allowed origins from environment variable or use defaults with a broader approach
+allowed_origins = os.environ.get("ALLOWED_ORIGINS", "*")
+origins = ["*"] if allowed_origins == "*" else [origin.strip() for origin in allowed_origins.split(",")]
 
-# Configure CORS
+# Configure CORS with more permissive settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -23,6 +23,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=86400,  # Cache preflight response for 24 hours
 )
 
 # Initialize Supabase client

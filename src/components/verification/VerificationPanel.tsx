@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -28,14 +27,19 @@ interface VerificationPanelProps {
 // Get API URL from environment or default
 const API_URL = import.meta.env.VITE_API_URL || "https://58efc0c8-52f0-4b94-abcc-024e3f64d36c-backend.lovableproject.com";
 
-// Function to check API availability
+// Function to check API availability with improved CORS handling
 const checkApiAvailability = async (): Promise<boolean> => {
   try {
     const response = await fetch(`${API_URL}/`, { 
       method: 'GET',
       mode: 'cors',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      credentials: 'omit' // Don't send credentials to avoid CORS preflight issues
     });
+    
     return response.ok;
   } catch (error) {
     console.error("API availability check failed:", error);
@@ -72,12 +76,22 @@ export function VerificationPanel({
     const checkApi = async () => {
       const isAvailable = await checkApiAvailability();
       setApiAvailable(isAvailable);
+      
       if (!isAvailable) {
+        console.log("API not available at:", API_URL);
         setApiError("Verification API is not available. Please try again later.");
+      } else {
+        console.log("API is available at:", API_URL);
+        setApiError(null);
       }
     };
     
     checkApi();
+    
+    // Check API availability periodically
+    const intervalId = setInterval(checkApi, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(intervalId);
   }, []);
 
   const handleStartVerification = async () => {
@@ -122,10 +136,11 @@ export function VerificationPanel({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           'Authorization': authToken ? `Bearer ${authToken}` : ''
         },
         mode: 'cors',
-        credentials: 'same-origin',
+        credentials: 'omit', // Don't send credentials to avoid CORS preflight issues
         body: JSON.stringify({
           code,
           project_id: projectId,
