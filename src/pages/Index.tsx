@@ -1,5 +1,6 @@
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { MarketingNavbar } from "@/components/layout/MarketingNavbar";
 import { 
   ShieldCheck, Code, FileCheck, Zap, Layers, 
