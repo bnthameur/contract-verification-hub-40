@@ -11,17 +11,18 @@ from typing import List, Dict, Any, Optional, Union
 
 app = FastAPI(title="FormalBase API", description="Smart Contract Verification API")
 
+# Get allowed origins from environment variable or use defaults
+allowed_origins = os.environ.get("ALLOWED_ORIGINS", "https://58efc0c8-52f0-4b94-abcc-024e3f64d36c.lovableproject.com,http://localhost:8080")
+origins = [origin.strip() for origin in allowed_origins.split(",")]
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://58efc0c8-52f0-4b94-abcc-024e3f64d36c.lovableproject.com",  # Main app domain
-        "https://*.lovableproject.com",                                      # All Lovable domains 
-        "http://localhost:8080",                                            # Local development
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Initialize Supabase client
@@ -382,6 +383,11 @@ async def analyze_contract(request: ContractRequest, authorization: Optional[str
     except Exception as e:
         print(f"Analysis error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+@app.get("/")
+async def root():
+    """Health check endpoint"""
+    return {"status": "running", "message": "FormalBase API is operational"}
 
 @app.get("/results/{project_id}")
 async def get_results(project_id: str, authorization: Optional[str] = Header(None)):

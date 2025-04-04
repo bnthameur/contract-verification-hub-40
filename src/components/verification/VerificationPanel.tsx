@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { VerificationIssuesList } from "./VerificationIssuesList";
@@ -28,6 +28,21 @@ interface VerificationPanelProps {
 // Get API URL from environment or default
 const API_URL = import.meta.env.VITE_API_URL || "https://58efc0c8-52f0-4b94-abcc-024e3f64d36c-backend.lovableproject.com";
 
+// Function to check API availability
+const checkApiAvailability = async (): Promise<boolean> => {
+  try {
+    const response = await fetch(`${API_URL}/`, { 
+      method: 'GET',
+      mode: 'cors',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return response.ok;
+  } catch (error) {
+    console.error("API availability check failed:", error);
+    return false;
+  }
+};
+
 export function VerificationPanel({ 
   projectId, 
   code, 
@@ -39,6 +54,7 @@ export function VerificationPanel({
   const [level, setLevel] = useState<VerificationLevel>(VerificationLevel.SIMPLE);
   const [isVerifying, setIsVerifying] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
   const { toast } = useToast();
   
   const isPending = result?.status === VerificationStatus.PENDING;
@@ -50,6 +66,19 @@ export function VerificationPanel({
   const errorCount = result?.results.filter(issue => issue.type === 'error').length || 0;
   const warningCount = result?.results.filter(issue => issue.type === 'warning').length || 0;
   const infoCount = result?.results.filter(issue => issue.type === 'info').length || 0;
+
+  // Check API availability when component mounts
+  useEffect(() => {
+    const checkApi = async () => {
+      const isAvailable = await checkApiAvailability();
+      setApiAvailable(isAvailable);
+      if (!isAvailable) {
+        setApiError("Verification API is not available. Please try again later.");
+      }
+    };
+    
+    checkApi();
+  }, []);
 
   const handleStartVerification = async () => {
     if (!projectId || !code) {
@@ -95,6 +124,8 @@ export function VerificationPanel({
           'Content-Type': 'application/json',
           'Authorization': authToken ? `Bearer ${authToken}` : ''
         },
+        mode: 'cors',
+        credentials: 'same-origin',
         body: JSON.stringify({
           code,
           project_id: projectId,
@@ -187,6 +218,16 @@ export function VerificationPanel({
               </SelectContent>
             </Select>
           </div>
+
+          {apiAvailable === false && (
+            <div className="bg-destructive/10 text-destructive p-3 rounded-md text-sm border border-destructive/20">
+              <p className="font-medium">Verification API Unreachable</p>
+              <p className="mt-1">The verification service is currently unavailable. Please try again later.</p>
+              <p className="mt-2 text-xs">
+                API endpoint: {API_URL}
+              </p>
+            </div>
+          )}
 
           {apiError && (
             <div className="bg-destructive/10 text-destructive p-3 rounded-md text-sm border border-destructive/20">
@@ -322,7 +363,7 @@ export function VerificationPanel({
         )}
         <Button 
           onClick={handleStartVerification} 
-          disabled={isRunning}
+          disabled={isRunning || apiAvailable === false}
           className={isRunning && onStop ? "flex-1" : "w-full"}
         >
           {isRunning ? (
