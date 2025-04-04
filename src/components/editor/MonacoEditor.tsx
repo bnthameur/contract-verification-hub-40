@@ -135,9 +135,15 @@ interface MonacoEditorProps {
   value: string;
   onChange: (value: string) => void;
   height?: string;
+  onEditorMount?: (editor: monaco.editor.IStandaloneCodeEditor) => void;
 }
 
-export function MonacoEditor({ value = SOLIDITY_EXAMPLE, onChange, height = "70vh" }: MonacoEditorProps) {
+export function MonacoEditor({ 
+  value = SOLIDITY_EXAMPLE, 
+  onChange, 
+  height = "70vh",
+  onEditorMount 
+}: MonacoEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const monacoRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const { theme } = useTheme();
@@ -308,6 +314,11 @@ export function MonacoEditor({ value = SOLIDITY_EXAMPLE, onChange, height = "70v
       monacoRef.current.onDidChangeModelContent(() => {
         onChange(monacoRef.current?.getValue() || "");
       });
+
+      // Call the onEditorMount callback if provided
+      if (onEditorMount && monacoRef.current) {
+        onEditorMount(monacoRef.current);
+      }
 
       setIsEditorReady(true);
     }

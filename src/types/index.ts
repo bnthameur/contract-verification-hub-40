@@ -38,6 +38,7 @@ export interface VerificationResult {
   logs: string[];
   created_at: string;
   completed_at?: string;
+  structured_results?: StructuredVerificationIssue[];
 }
 
 export interface VerificationIssue {
@@ -49,6 +50,21 @@ export interface VerificationIssue {
   };
   code?: string;
   severity: 'high' | 'medium' | 'low';
+  function_name?: string;
+  contract_name?: string;
+  suggested_fix?: string;
+}
+
+export interface StructuredVerificationIssue {
+  error_type: string;
+  severity: 'high' | 'medium' | 'low';
+  description: string;
+  line_number?: number;
+  column_number?: number;
+  function_name?: string;
+  contract_name?: string;
+  suggested_fix?: string;
+  code_snippet?: string;
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system';

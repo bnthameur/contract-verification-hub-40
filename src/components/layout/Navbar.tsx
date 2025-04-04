@@ -6,7 +6,11 @@ import { ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
-export function Navbar() {
+interface NavbarProps {
+  hideUser?: boolean;
+}
+
+export function Navbar({ hideUser = false }: NavbarProps) {
   const { user } = useAuth();
 
   return (
@@ -23,17 +27,19 @@ export function Navbar() {
         <div className="flex flex-1 items-center justify-end space-x-4">
           <nav className="flex items-center space-x-2">
             <ThemeToggle />
-            {user ? (
-              <UserNav user={{ email: user.email || "", avatar_url: user.user_metadata?.avatar_url }} />
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" asChild>
-                  <Link to="/auth?mode=login">Login</Link>
-                </Button>
-                <Button asChild>
-                  <Link to="/auth?mode=register">Sign Up</Link>
-                </Button>
-              </div>
+            {!hideUser && (
+              user ? (
+                <UserNav user={{ email: user.email || "", avatar_url: user.user_metadata?.avatar_url }} />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" asChild>
+                    <Link to="/auth?mode=login">Login</Link>
+                  </Button>
+                  <Button asChild>
+                    <Link to="/auth?mode=register">Sign Up</Link>
+                  </Button>
+                </div>
+              )
             )}
           </nav>
         </div>

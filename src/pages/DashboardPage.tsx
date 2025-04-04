@@ -1,10 +1,9 @@
-
 import { Navbar } from "@/components/layout/Navbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MonacoEditor } from "@/components/editor/MonacoEditor";
 import { VerificationPanel } from "@/components/verification/VerificationPanel";
 import { Project, VerificationIssue, VerificationLevel, VerificationResult, VerificationStatus } from "@/types";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, Save, Upload, FileSymlink, PlusCircle, FileCode } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { LightRay } from "@/components/layout/LightRay";
 import { ProjectCreationDialog } from "@/components/project/ProjectCreationDialog";
+import * as monaco from "monaco-editor";
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -22,6 +22,7 @@ export default function DashboardPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -315,10 +316,8 @@ export default function DashboardPage() {
   };
 
   const handleStartVerification = async (level: VerificationLevel) => {
-    // Save any unsaved changes first
     await handleSaveCode();
     
-    // Fetch latest verification result
     if (activeProject) {
       await fetchLatestVerificationResult(activeProject.id);
     }
@@ -360,6 +359,35 @@ export default function DashboardPage() {
     }
   };
 
+  const handleNavigateToLine = (lineNumber: number) => {
+    if (!editorRef.current) return;
+    
+    editorRef.current.revealLineInCenter(lineNumber);
+    
+    editorRef.current.setPosition({ lineNumber, column: 1 });
+    
+    const decorations = editorRef.current.createDecorationsCollection([
+      { 
+        range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+        options: { 
+          isWholeLine: true,
+          className: 'bg-primary/20',
+          glyphMarginClassName: 'bg-primary/40'
+        }
+      }
+    ]);
+    
+    editorRef.current.focus();
+    
+    setTimeout(() => {
+      decorations.clear();
+    }, 3000);
+  };
+
+  const handleEditorMount = (editor: monaco.editor.IStandaloneCodeEditor) => {
+    editorRef.current = editor;
+  };
+
   useEffect(() => {
     if (activeProject) {
       setCode(activeProject.code);
@@ -379,7 +407,7 @@ export default function DashboardPage() {
   return (
     <div className="flex h-screen flex-col">
       <LightRay />
-      <Navbar />
+      <Navbar hideUser />
       
       <div className="flex flex-1 overflow-hidden">
         <Sidebar 
@@ -423,7 +451,11 @@ export default function DashboardPage() {
                     </div>
                     
                     <TabsContent value="code" className="flex-1 border p-0 overflow-hidden">
-                      <MonacoEditor value={code} onChange={setCode} />
+                      <MonacoEditor 
+                        value={code} 
+                        onChange={setCode} 
+                        onEditorMount={handleEditorMount}
+                      />
                     </TabsContent>
                   </Tabs>
                 </div>
@@ -435,6 +467,7 @@ export default function DashboardPage() {
                     onVerify={handleStartVerification}
                     onStop={handleStopVerification}
                     result={verificationResult}
+                    onNavigateToLine={handleNavigateToLine}
                   />
                 </div>
               </div>

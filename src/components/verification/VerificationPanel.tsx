@@ -5,12 +5,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VerificationIssue, VerificationLevel, VerificationResult, VerificationStatus } from "@/types";
-import { CheckCircle, AlertTriangle, XCircle, Play, Loader2, Terminal, Shield, ShieldAlert, ShieldCheck, Square } from "lucide-react";
+import { 
+  CheckCircle, AlertTriangle, XCircle, Play, Loader2, Terminal, 
+  Shield, ShieldAlert, ShieldCheck, Square 
+} from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
+import { VerificationIssuesList } from "./VerificationIssuesList";
 
 interface VerificationPanelProps {
   projectId: string;
@@ -18,12 +22,20 @@ interface VerificationPanelProps {
   onVerify: (level: VerificationLevel) => void;
   onStop?: () => void;
   result?: VerificationResult;
+  onNavigateToLine?: (line: number) => void;
 }
 
 // Define API URL from environment or default to localhost for development
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-export function VerificationPanel({ projectId, code, onVerify, onStop, result }: VerificationPanelProps) {
+export function VerificationPanel({ 
+  projectId, 
+  code, 
+  onVerify, 
+  onStop, 
+  result,
+  onNavigateToLine 
+}: VerificationPanelProps) {
   const [level, setLevel] = useState<VerificationLevel>(VerificationLevel.SIMPLE);
   const [isVerifying, setIsVerifying] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -53,6 +65,10 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
       setIsVerifying(true);
       setApiError(null);
       
+      // Get auth token for authorization
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token;
+      
       // Create initial verification record
       const initialResult: Partial<VerificationResult> = {
         project_id: projectId,
@@ -71,16 +87,18 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
         
       if (insertError) throw insertError;
       
-      // Call the backend API - use the API_URL constant
+      // Call the backend API with auth token
       console.log(`Calling API at: ${API_URL}/analyze`);
       const response = await fetch(`${API_URL}/analyze`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': authToken ? `Bearer ${authToken}` : ''
         },
         body: JSON.stringify({
           code,
           project_id: projectId,
+          auth_token: authToken
         }),
       });
       
@@ -209,27 +227,17 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
                 </TabsTrigger>
               </TabsList>
               
-              <TabsContent value="issues" className="h-60">
-                <ScrollArea className="h-full rounded-md border p-4">
-                  {result?.results && result.results.length > 0 ? (
-                    <div className="space-y-4">
-                      {result.results.map((issue, index) => (
-                        <IssueCard key={index} issue={issue} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center text-center p-4">
-                      <ShieldCheck className="h-10 w-10 text-green-500 mb-2" />
-                      <h3 className="text-lg font-medium">No issues found</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Your code looks clean!
-                      </p>
-                    </div>
-                  )}
-                </ScrollArea>
+              <TabsContent value="issues" className="h-96">
+                {result?.results && (
+                  <VerificationIssuesList 
+                    issues={result.results} 
+                    onNavigateToLine={onNavigateToLine}
+                    maxHeight="calc(100vh - 400px)"
+                  />
+                )}
               </TabsContent>
               
-              <TabsContent value="logs" className="h-60">
+              <TabsContent value="logs" className="h-96">
                 <ScrollArea className="h-full rounded-md border bg-muted/50 p-4 font-mono text-sm">
                   {result?.logs && result.logs.length > 0 ? (
                     <div className="space-y-1">
@@ -247,7 +255,7 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
                 </ScrollArea>
               </TabsContent>
               
-              <TabsContent value="summary" className="h-60">
+              <TabsContent value="summary" className="h-96">
                 <div className="rounded-md border p-4 h-full">
                   <div className="flex flex-col h-full justify-between">
                     <div>
@@ -336,46 +344,5 @@ export function VerificationPanel({ projectId, code, onVerify, onStop, result }:
         </Button>
       </CardFooter>
     </Card>
-  );
-}
-
-function IssueCard({ issue }: { issue: VerificationIssue }) {
-  return (
-    <div className="rounded-md border p-3 bg-card">
-      <div className="flex items-start gap-2">
-        {issue.type === 'error' ? (
-          <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-        ) : issue.type === 'warning' ? (
-          <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-        ) : (
-          <ShieldAlert className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-        )}
-        
-        <div className="flex-1">
-          <div className="flex items-center justify-between">
-            <h4 className="font-medium">
-              {issue.type.charAt(0).toUpperCase() + issue.type.slice(1)}
-            </h4>
-            <Badge variant={issue.severity === 'high' ? 'destructive' : issue.severity === 'medium' ? 'default' : 'outline'}>
-              {issue.severity}
-            </Badge>
-          </div>
-          
-          <p className="text-sm text-muted-foreground mt-1">{issue.message}</p>
-          
-          {issue.location && (
-            <div className="mt-2 text-xs text-muted-foreground">
-              Line {issue.location.line}, Column {issue.location.column}
-            </div>
-          )}
-          
-          {issue.code && (
-            <pre className="mt-2 p-2 text-xs bg-muted rounded-md overflow-auto">
-              <code>{issue.code}</code>
-            </pre>
-          )}
-        </div>
-      </div>
-    </div>
   );
 }
