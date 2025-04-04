@@ -25,8 +25,8 @@ interface VerificationPanelProps {
   onNavigateToLine?: (line: number) => void;
 }
 
-// Define API URL from environment or default to localhost for development
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// Get API URL from environment or default
+const API_URL = import.meta.env.VITE_API_URL || "https://58efc0c8-52f0-4b94-abcc-024e3f64d36c-backend.lovableproject.com";
 
 export function VerificationPanel({ 
   projectId, 
@@ -104,7 +104,7 @@ export function VerificationPanel({
       
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`API Error: ${errorText}`);
+        throw new Error(`API Error (${response.status}): ${errorText}`);
       }
       
       const data = await response.json();
@@ -193,7 +193,7 @@ export function VerificationPanel({
               <p className="font-medium">API Error</p>
               <p className="mt-1">{apiError}</p>
               <p className="mt-2 text-xs">
-                Make sure the backend API is running at: {API_URL}
+                API endpoint: {API_URL}
               </p>
             </div>
           )}
