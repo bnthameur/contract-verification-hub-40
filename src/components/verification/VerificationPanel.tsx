@@ -37,7 +37,8 @@ const checkApiAvailability = async (): Promise<boolean> => {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      credentials: 'omit' // Don't send credentials to avoid CORS preflight issues
+      credentials: 'omit', // Don't send credentials to avoid CORS preflight issues
+      cache: 'no-cache' // Prevent caching
     });
     
     return response.ok;
@@ -74,15 +75,21 @@ export function VerificationPanel({
   // Check API availability when component mounts
   useEffect(() => {
     const checkApi = async () => {
-      const isAvailable = await checkApiAvailability();
-      setApiAvailable(isAvailable);
-      
-      if (!isAvailable) {
-        console.log("API not available at:", API_URL);
-        setApiError("Verification API is not available. Please try again later.");
-      } else {
-        console.log("API is available at:", API_URL);
-        setApiError(null);
+      try {
+        const isAvailable = await checkApiAvailability();
+        setApiAvailable(isAvailable);
+        
+        if (!isAvailable) {
+          console.log("API not available at:", API_URL);
+          setApiError("Verification API is not available. Please try again later.");
+        } else {
+          console.log("API is available at:", API_URL);
+          setApiError(null);
+        }
+      } catch (error) {
+        console.error("Error checking API availability:", error);
+        setApiAvailable(false);
+        setApiError("Error connecting to verification API.");
       }
     };
     
