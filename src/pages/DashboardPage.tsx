@@ -1,4 +1,3 @@
-
 import { Navbar } from "@/components/layout/Navbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ResizableLayout } from "@/components/layout/ResizableLayout";
@@ -508,16 +507,19 @@ rule preservesTotalSupply(method f) {
   const handleCancelLogicValidation = () => {
     if (verificationResult?.status === VerificationStatus.PENDING) {
       // Delete the pending verification if user cancels
-      supabase
-        .from('verification_results')
-        .delete()
-        .eq('id', verificationResult.id)
-        .then(() => {
-          setVerificationResult(undefined);
-        })
-        .catch(error => {
-          console.error("Error cancelling verification:", error);
-        });
+      // Fix for the TypeScript error:
+      // Convert the Promise chain to async/await with try/catch
+      try {
+        supabase
+          .from('verification_results')
+          .delete()
+          .eq('id', verificationResult.id)
+          .then(() => {
+            setVerificationResult(undefined);
+          });
+      } catch (error) {
+        console.error("Error cancelling verification:", error);
+      }
     }
     
     setActiveVerificationTab("verification");
