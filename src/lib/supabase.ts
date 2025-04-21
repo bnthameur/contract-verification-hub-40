@@ -71,3 +71,18 @@ export async function ensureUserProfile(userId: string, email: string) {
     return null;
   }
 }
+
+// Function to get verification issues for a result
+export async function getVerificationIssues(resultId: string) {
+  try {
+    const { data, error } = await supabase
+      .rpc('get_verification_issues', { v_result_id: resultId });
+      
+    if (error) throw error;
+    
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching verification issues:', error);
+    return [];
+  }
+}

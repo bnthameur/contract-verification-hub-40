@@ -5,6 +5,11 @@
 ALTER TABLE public.verification_results 
 ADD COLUMN IF NOT EXISTS structured_results JSONB DEFAULT '[]'::jsonb;
 
+-- Add columns for the advanced verification workflow
+ALTER TABLE public.verification_results
+ADD COLUMN IF NOT EXISTS logic_text TEXT DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS cvl_code TEXT DEFAULT NULL;
+
 -- Create a new type for error severity
 DO $$ 
 BEGIN
@@ -60,3 +65,4 @@ $$;
 
 -- Grant access to the function
 GRANT EXECUTE ON FUNCTION public.get_verification_issues TO anon, authenticated;
+

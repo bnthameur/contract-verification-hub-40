@@ -72,6 +72,9 @@ export interface Database {
           logs: string[]
           created_at: string
           completed_at: string | null
+          structured_results: Json | null
+          logic_text: string | null
+          cvl_code: string | null
         }
         Insert: {
           id?: string
@@ -82,6 +85,9 @@ export interface Database {
           logs?: string[]
           created_at?: string
           completed_at?: string | null
+          structured_results?: Json | null
+          logic_text?: string | null
+          cvl_code?: string | null
         }
         Update: {
           id?: string
@@ -92,6 +98,53 @@ export interface Database {
           logs?: string[]
           created_at?: string
           completed_at?: string | null
+          structured_results?: Json | null
+          logic_text?: string | null
+          cvl_code?: string | null
+        }
+      }
+      verification_issues: {
+        Row: {
+          id: string
+          verification_id: string
+          error_type: string
+          severity: 'low' | 'medium' | 'high'
+          description: string
+          line_number: number | null
+          column_number: number | null
+          function_name: string | null
+          contract_name: string | null
+          suggested_fix: string | null
+          code_snippet: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          verification_id: string
+          error_type: string
+          severity: 'low' | 'medium' | 'high'
+          description: string
+          line_number?: number | null
+          column_number?: number | null
+          function_name?: string | null
+          contract_name?: string | null
+          suggested_fix?: string | null
+          code_snippet?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          verification_id?: string
+          error_type?: string
+          severity?: 'low' | 'medium' | 'high'
+          description?: string
+          line_number?: number | null
+          column_number?: number | null
+          function_name?: string | null
+          contract_name?: string | null
+          suggested_fix?: string | null
+          code_snippet?: string | null
+          created_at?: string
         }
       }
     }
@@ -103,6 +156,10 @@ export interface Database {
       get_project_verification_results: {
         Args: { p_project_id: string }
         Returns: Database['public']['Tables']['verification_results']['Row'][]
+      }
+      get_verification_issues: {
+        Args: { v_result_id: string }
+        Returns: Database['public']['Tables']['verification_issues']['Row'][]
       }
     }
   }

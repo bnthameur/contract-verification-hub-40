@@ -1,11 +1,14 @@
+
 import { Navbar } from "@/components/layout/Navbar";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { ResizableLayout } from "@/components/layout/ResizableLayout";
 import { MonacoEditor } from "@/components/editor/MonacoEditor";
 import { VerificationPanel } from "@/components/verification/VerificationPanel";
+import { LogicValidation } from "@/components/verification/LogicValidation";
 import { Project, VerificationIssue, VerificationLevel, VerificationResult, VerificationStatus } from "@/types";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Save, Upload, FileSymlink, PlusCircle, FileCode } from "lucide-react";
+import { ChevronRight, Save, Upload, FileSymlink, PlusCircle, FileCode, ChevronUp, ChevronDown } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +25,8 @@ export default function DashboardPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [activeVerificationTab, setActiveVerificationTab] = useState<"verification" | "logic-validation">("verification");
+  const [isLoadingAILogic, setIsLoadingAILogic] = useState(false);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -318,9 +323,204 @@ export default function DashboardPage() {
   const handleStartVerification = async (level: VerificationLevel) => {
     await handleSaveCode();
     
+    if (level === VerificationLevel.ADVANCED) {
+      setActiveVerificationTab("logic-validation");
+      setIsLoadingAILogic(true);
+      
+      // Simulate AI generating logic (in a real app, this would call an API)
+      setTimeout(async () => {
+        try {
+          if (!activeProject) return;
+          
+          const logicText = `# Auto-generated logic for ${activeProject.name}\n\nThis smart contract appears to be a ${getContractDescription(code)}.\n\nProperties to verify:\n- No integer overflow or underflow\n- No reentrancy vulnerabilities\n- Functions can only be called by authorized roles\n- State changes preserve expected invariants\n\nPlease review and edit these properties to match your verification requirements.`;
+          
+          // Create initial verification record with the AI-generated logic
+          const initialResult: Partial<VerificationResult> = {
+            project_id: activeProject.id,
+            level: VerificationLevel.ADVANCED,
+            status: VerificationStatus.PENDING,
+            results: [],
+            logs: ["Generated initial contract logic."],
+            logic_text: logicText,
+            created_at: new Date().toISOString(),
+          };
+          
+          const { data: verificationRecord, error: insertError } = await supabase
+            .from('verification_results')
+            .insert(initialResult)
+            .select()
+            .single();
+            
+          if (insertError) throw insertError;
+          
+          setVerificationResult(verificationRecord);
+          setIsLoadingAILogic(false);
+        } catch (error) {
+          console.error("Error generating logic:", error);
+          setIsLoadingAILogic(false);
+          toast({
+            title: "Error",
+            description: "Failed to generate contract logic",
+            variant: "destructive"
+          });
+        }
+      }, 3000);
+      
+      return;
+    }
+    
+    setActiveVerificationTab("verification");
+    
     if (activeProject) {
       await fetchLatestVerificationResult(activeProject.id);
     }
+  };
+
+  const handleConfirmLogic = async (logicText: string) => {
+    if (!activeProject || !verificationResult) return;
+    
+    try {
+      // Update the verification result with confirmed logic
+      const { error } = await supabase
+        .from('verification_results')
+        .update({
+          logic_text: logicText,
+          status: VerificationStatus.RUNNING,
+          logs: [...(verificationResult.logs || []), "Logic confirmed by user. Starting verification..."]
+        })
+        .eq('id', verificationResult.id);
+        
+      if (error) throw error;
+      
+      // Fetch the updated verification result
+      await fetchLatestVerificationResult(activeProject.id);
+      
+      // Simulate the backend processing (in a real app, this would be done by the backend)
+      setTimeout(async () => {
+        if (!verificationResult) return;
+        
+        // Generate mock CVL code
+        const mockCvlCode = `
+/*
+ * Generated CVL code for advanced verification
+ * Based on user-confirmed logic
+ */
+
+// Import Certora prover library
+using CertoraProver;
+
+// Define rules
+rule noReentrancy(method f) {
+    env e;
+    calldataarg args;
+    
+    // Check for reentrancy
+    f(e, args);
+    
+    // Assert no reentrancy
+    assert !lastReverted, "Method should not revert";
+}
+
+rule preservesTotalSupply(method f) {
+    env e;
+    calldataarg args;
+    
+    uint256 totalSupplyBefore = totalSupply();
+    
+    f(e, args);
+    
+    uint256 totalSupplyAfter = totalSupply();
+    
+    assert totalSupplyBefore == totalSupplyAfter, "Total supply should remain constant";
+}
+
+// Add more rules based on confirmed logic
+`;
+        
+        // Mock verification issues
+        const mockIssues = [
+          {
+            verification_id: verificationResult.id,
+            error_type: "Reentrancy",
+            severity: "high" as const,
+            description: "Potential reentrancy vulnerability in transfer function",
+            line_number: 45,
+            column_number: 4,
+            function_name: "transfer",
+            contract_name: activeProject?.name,
+            suggested_fix: "Consider implementing a reentrancy guard or following the checks-effects-interactions pattern",
+            code_snippet: "function transfer(address to, uint256 amount) public { ... }"
+          },
+          {
+            verification_id: verificationResult.id,
+            error_type: "Arithmetic",
+            severity: "medium" as const,
+            description: "Potential integer overflow in calculateReward function",
+            line_number: 67,
+            column_number: 12,
+            function_name: "calculateReward",
+            contract_name: activeProject?.name,
+            suggested_fix: "Use SafeMath or Solidity 0.8+ for automatic overflow checking",
+            code_snippet: "uint256 reward = amount * rate;"
+          }
+        ];
+        
+        // Insert mock issues
+        for (const issue of mockIssues) {
+          await supabase.from('verification_issues').insert(issue);
+        }
+        
+        // Update the verification result
+        await supabase
+          .from('verification_results')
+          .update({
+            status: VerificationStatus.COMPLETED,
+            cvl_code: mockCvlCode,
+            completed_at: new Date().toISOString(),
+            logs: [...(verificationResult.logs || []), 
+              "Generated CVL code from logic", 
+              "Running Certora Prover...", 
+              "Verification completed with 2 issues found"]
+          })
+          .eq('id', verificationResult.id);
+          
+        // Fetch the updated result
+        await fetchLatestVerificationResult(activeProject.id);
+        
+        toast({
+          title: "Verification complete",
+          description: "Advanced verification has completed. Check the results tab for details.",
+        });
+      }, 5000);
+      
+      // Switch to verification tab to show results
+      setActiveVerificationTab("verification");
+    } catch (error: any) {
+      console.error("Error confirming logic:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to process verification",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleCancelLogicValidation = () => {
+    if (verificationResult?.status === VerificationStatus.PENDING) {
+      // Delete the pending verification if user cancels
+      supabase
+        .from('verification_results')
+        .delete()
+        .eq('id', verificationResult.id)
+        .then(() => {
+          setVerificationResult(undefined);
+        })
+        .catch(error => {
+          console.error("Error cancelling verification:", error);
+        });
+    }
+    
+    setActiveVerificationTab("verification");
   };
 
   const handleStopVerification = async () => {
@@ -388,6 +588,21 @@ export default function DashboardPage() {
     editorRef.current = editor;
   };
 
+  // Helper to generate a contract description based on code content
+  const getContractDescription = (code: string): string => {
+    if (code.includes("ERC20") || code.includes("balanceOf") || code.includes("transfer(")) {
+      return "token contract with ERC20-like functionality";
+    } else if (code.includes("ERC721") || code.includes("ownerOf") || code.includes("transferFrom(")) {
+      return "NFT contract with ERC721-like functionality";
+    } else if (code.includes("payable") || code.includes("msg.value")) {
+      return "payment-handling contract";
+    } else if (code.includes("owner") || code.includes("onlyOwner")) {
+      return "contract with ownership controls";
+    } else {
+      return "basic contract";
+    }
+  };
+
   useEffect(() => {
     if (activeProject) {
       setCode(activeProject.code);
@@ -404,124 +619,159 @@ export default function DashboardPage() {
     setIsDragging(false);
   };
 
-  return (
-    <div className="flex h-screen flex-col">
-      <LightRay />
-      <Navbar hideUser />
-      
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar 
-          projects={projects} 
-          activeProject={activeProject} 
-          onSelectProject={setActiveProject}
-          onCreateProject={() => setIsCreatingProject(true)}
-          onRefreshProjects={fetchProjects}
-        />
+  // Render the resizable layout when a project is active
+  const renderProjectContent = () => {
+    return (
+      <>
+        <div className="border-b px-6 py-3 flex items-center justify-between bg-card/50">
+          <div className="flex items-center text-sm text-muted-foreground">
+            <span>Projects</span>
+            <ChevronRight className="h-4 w-4 mx-1" />
+            <span className="font-medium text-foreground">{activeProject?.name}</span>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleSaveCode} className="gap-1.5">
+              <Save className="h-4 w-4" />
+              Save
+            </Button>
+          </div>
+        </div>
         
-        <main className="flex-1 flex flex-col overflow-hidden">
-          {activeProject ? (
-            <>
-              <div className="border-b px-6 py-3 flex items-center justify-between bg-card/50">
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <span>Projects</span>
-                  <ChevronRight className="h-4 w-4 mx-1" />
-                  <span className="font-medium text-foreground">{activeProject.name}</span>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={handleSaveCode} className="gap-1.5">
-                    <Save className="h-4 w-4" />
-                    Save
-                  </Button>
-                </div>
-              </div>
-              
-              <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-3">
-                <div className="col-span-2 overflow-hidden p-4 flex flex-col h-full">
-                  <Tabs defaultValue="code" className="flex-1 flex flex-col">
-                    <div className="flex justify-between items-center mb-2">
-                      <TabsList>
-                        <TabsTrigger value="code">Code</TabsTrigger>
-                        <TabsTrigger value="tests" disabled>Tests</TabsTrigger>
-                        <TabsTrigger value="deployment" disabled>Deployment</TabsTrigger>
-                      </TabsList>
-                      
-                      <div className="text-xs text-muted-foreground">
-                        Last saved: {new Date(activeProject.updated_at).toLocaleString()}
-                      </div>
-                    </div>
-                    
-                    <TabsContent value="code" className="flex-1 border p-0 overflow-hidden">
-                      <MonacoEditor 
-                        value={code} 
-                        onChange={setCode} 
-                        onEditorMount={handleEditorMount}
-                      />
-                    </TabsContent>
-                  </Tabs>
+        <ResizableLayout
+          sidebarContent={
+            <Sidebar 
+              projects={projects} 
+              activeProject={activeProject} 
+              onSelectProject={setActiveProject}
+              onCreateProject={() => setIsCreatingProject(true)}
+              onRefreshProjects={fetchProjects}
+            />
+          }
+          mainContent={
+            <div className="p-4 flex flex-col h-full">
+              <Tabs defaultValue="code" className="flex-1 flex flex-col">
+                <div className="flex justify-between items-center mb-2">
+                  <TabsList>
+                    <TabsTrigger value="code">Code</TabsTrigger>
+                    <TabsTrigger value="tests" disabled>Tests</TabsTrigger>
+                    <TabsTrigger value="deployment" disabled>Deployment</TabsTrigger>
+                  </TabsList>
+                  
+                  <div className="text-xs text-muted-foreground">
+                    Last saved: {activeProject ? new Date(activeProject.updated_at).toLocaleString() : ''}
+                  </div>
                 </div>
                 
-                <div className="border-l overflow-auto p-4">
+                <TabsContent value="code" className="flex-1 border p-0 overflow-hidden">
+                  <MonacoEditor 
+                    value={code} 
+                    onChange={setCode} 
+                    onEditorMount={handleEditorMount}
+                  />
+                </TabsContent>
+              </Tabs>
+            </div>
+          }
+          verificationContent={
+            <div className="overflow-auto p-4 h-full">
+              <Tabs
+                value={activeVerificationTab}
+                onValueChange={val => setActiveVerificationTab(val as "verification" | "logic-validation")}
+              >
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="verification">Verification</TabsTrigger>
+                  <TabsTrigger value="logic-validation">Logic Validation</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="verification" className="h-full">
                   <VerificationPanel 
-                    projectId={activeProject.id} 
+                    projectId={activeProject?.id || ''} 
                     code={code}
                     onVerify={handleStartVerification}
                     onStop={handleStopVerification}
                     result={verificationResult}
                     onNavigateToLine={handleNavigateToLine}
                   />
-                </div>
-              </div>
-            </>
-          ) : (
-            <div 
-              className="flex-1 flex items-center justify-center"
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+                </TabsContent>
+                
+                <TabsContent value="logic-validation" className="h-full">
+                  <LogicValidation
+                    projectId={activeProject?.id || ''}
+                    code={code}
+                    result={verificationResult}
+                    onConfirmLogic={handleConfirmLogic}
+                    onCancel={handleCancelLogicValidation}
+                    isLoadingAILogic={isLoadingAILogic}
+                  />
+                </TabsContent>
+              </Tabs>
+            </div>
+          }
+        />
+      </>
+    );
+  };
+
+  // Render the welcome screen when no project is active
+  const renderWelcomeScreen = () => {
+    return (
+      <div 
+        className="flex-1 flex items-center justify-center"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <div className={`text-center max-w-md p-6 transition-all ${isDragging ? 'scale-105 opacity-70' : ''}`}>
+          <h2 className="text-2xl font-semibold mb-4">Welcome to FormalBase</h2>
+          <p className="text-muted-foreground mb-8">
+            Start by creating a new project or importing a Solidity file
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Button 
+              onClick={() => setIsCreatingProject(true)}
+              className="w-full flex items-center justify-center gap-2 p-6 h-auto flex-col"
+              variant="outline"
             >
-              <div className={`text-center max-w-md p-6 transition-all ${isDragging ? 'scale-105 opacity-70' : ''}`}>
-                <h2 className="text-2xl font-semibold mb-4">Welcome to FormalBase</h2>
-                <p className="text-muted-foreground mb-8">
-                  Start by creating a new project or importing a Solidity file
-                </p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Button 
-                    onClick={() => setIsCreatingProject(true)}
-                    className="w-full flex items-center justify-center gap-2 p-6 h-auto flex-col"
-                    variant="outline"
-                  >
-                    <FileCode className="h-10 w-10 mb-2 text-primary" />
-                    <span>Create New Project</span>
-                  </Button>
-                  
-                  <label>
-                    <input
-                      type="file"
-                      accept=".sol"
-                      onChange={handleFileUpload}
-                      disabled={isUploading}
-                      className="hidden"
-                    />
-                    <div className={`w-full flex items-center justify-center gap-2 p-6 h-full flex-col cursor-pointer border rounded-md ${isUploading ? 'opacity-70' : 'hover:border-primary hover:text-primary transition-colors'}`}>
-                      <Upload className="h-10 w-10 mb-2 text-primary" />
-                      <span>{isUploading ? 'Uploading...' : 'Upload Solidity File'}</span>
-                    </div>
-                  </label>
-                </div>
-                
-                {isDragging && (
-                  <div className="absolute inset-0 border-2 border-dashed border-primary bg-primary/5 flex items-center justify-center rounded-lg z-10">
-                    <div className="text-center">
-                      <FileSymlink className="h-16 w-16 mx-auto mb-4 text-primary" />
-                      <h3 className="text-xl font-medium">Drop your Solidity file here</h3>
-                    </div>
-                  </div>
-                )}
+              <FileCode className="h-10 w-10 mb-2 text-primary" />
+              <span>Create New Project</span>
+            </Button>
+            
+            <label>
+              <input
+                type="file"
+                accept=".sol"
+                onChange={handleFileUpload}
+                disabled={isUploading}
+                className="hidden"
+              />
+              <div className={`w-full flex items-center justify-center gap-2 p-6 h-full flex-col cursor-pointer border rounded-md ${isUploading ? 'opacity-70' : 'hover:border-primary hover:text-primary transition-colors'}`}>
+                <Upload className="h-10 w-10 mb-2 text-primary" />
+                <span>{isUploading ? 'Uploading...' : 'Upload Solidity File'}</span>
+              </div>
+            </label>
+          </div>
+          
+          {isDragging && (
+            <div className="absolute inset-0 border-2 border-dashed border-primary bg-primary/5 flex items-center justify-center rounded-lg z-10">
+              <div className="text-center">
+                <FileSymlink className="h-16 w-16 mx-auto mb-4 text-primary" />
+                <h3 className="text-xl font-medium">Drop your Solidity file here</h3>
               </div>
             </div>
           )}
-        </main>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex h-screen flex-col">
+      <LightRay />
+      <Navbar hideUser />
+      
+      <div className="flex flex-1 overflow-hidden">
+        {activeProject ? renderProjectContent() : renderWelcomeScreen()}
       </div>
       
       <ProjectCreationDialog

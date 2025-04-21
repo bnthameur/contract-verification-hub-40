@@ -39,6 +39,8 @@ export interface VerificationResult {
   created_at: string;
   completed_at?: string;
   structured_results?: StructuredVerificationIssue[];
+  logic_text?: string;
+  cvl_code?: string;
 }
 
 export interface VerificationIssue {
