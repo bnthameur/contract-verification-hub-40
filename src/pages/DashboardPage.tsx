@@ -668,8 +668,12 @@ rule preservesTotalSupply(method f) {
                 <TabsContent value="tests" className="flex-1 p-0 overflow-hidden">
                   {verificationResult?.cvl_code ? (
                     <MonacoEditor 
-                      value={verificationResult.cvl_code} 
-                      options={{ readOnly: true, language: 'plaintext' }}
+                      value={verificationResult.cvl_code}
+                      onChange={() => {}}
+                      options={{
+                        readOnly: true,
+                        language: 'plaintext'
+                      }}
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full">

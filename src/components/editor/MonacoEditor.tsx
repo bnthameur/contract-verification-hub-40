@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from "react";
 import * as monaco from "monaco-editor";
 import { useTheme } from "@/hooks/use-theme";
@@ -133,16 +132,18 @@ const SOLIDITY_SNIPPETS = [
 
 interface MonacoEditorProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
   height?: string;
   onEditorMount?: (editor: monaco.editor.IStandaloneCodeEditor) => void;
+  options?: monaco.editor.IStandaloneEditorConstructionOptions;
 }
 
 export function MonacoEditor({ 
   value = SOLIDITY_EXAMPLE, 
-  onChange, 
+  onChange = () => {}, 
   height = "70vh",
-  onEditorMount 
+  onEditorMount,
+  options = {}
 }: MonacoEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const monacoRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -307,12 +308,15 @@ export function MonacoEditor({
           horizontalHasArrows: false,
           verticalScrollbarSize: 16,
           horizontalScrollbarSize: 16
-        }
+        },
+        ...options
       });
 
       // Register model change event
       monacoRef.current.onDidChangeModelContent(() => {
-        onChange(monacoRef.current?.getValue() || "");
+        if (onChange) {
+          onChange(monacoRef.current?.getValue() || "");
+        }
       });
 
       // Call the onEditorMount callback if provided

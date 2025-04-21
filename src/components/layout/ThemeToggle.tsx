@@ -5,20 +5,14 @@ import { useTheme } from "@/hooks/use-theme";
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-
-  // Only two modes: light/dark, toggle on click
   const isDark = theme === "dark";
-
-  const handleToggle = () => {
-    setTheme(isDark ? "light" : "dark");
-  };
 
   return (
     <Button
       variant="ghost"
       size="icon"
-      aria-label="Toggle theme"
-      onClick={handleToggle}
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      onClick={() => setTheme(isDark ? "light" : "dark")}
       className="h-9 w-9 rounded-full transition-colors hover:bg-secondary"
     >
       {isDark ? (
