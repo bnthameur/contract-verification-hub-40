@@ -618,20 +618,6 @@ rule preservesTotalSupply(method f) {
   const renderProjectContent = () => {
     return (
       <>
-        <div className="border-b px-6 py-3 flex items-center justify-between bg-card/50">
-          <div className="flex items-center text-sm text-muted-foreground">
-            <span>Projects</span>
-            <ChevronRight className="h-4 w-4 mx-1" />
-            <span className="font-medium text-foreground">{activeProject?.name}</span>
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handleSaveCode} className="gap-1.5">
-              <Save className="h-4 w-4" />
-              Save
-            </Button>
-          </div>
-        </div>
-        
         <ResizableLayout
           sidebarContent={
             <Sidebar 
@@ -643,26 +629,58 @@ rule preservesTotalSupply(method f) {
             />
           }
           mainContent={
-            <div className="p-4 flex flex-col h-full">
+            <div className="flex flex-col h-full">
               <Tabs defaultValue="code" className="flex-1 flex flex-col">
-                <div className="flex justify-between items-center mb-2">
-                  <TabsList>
-                    <TabsTrigger value="code">Code</TabsTrigger>
-                    <TabsTrigger value="tests" disabled>Tests</TabsTrigger>
-                    <TabsTrigger value="deployment" disabled>Deployment</TabsTrigger>
-                  </TabsList>
+                <div className="border-b px-6 py-3 flex items-center justify-between bg-card/50">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center text-sm">
+                      <span className="text-muted-foreground">Project:</span>
+                      <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground" />
+                      <span className="font-medium">{activeProject?.name}</span>
+                    </div>
+                    
+                    <TabsList>
+                      <TabsTrigger value="code">Code</TabsTrigger>
+                      <TabsTrigger value="tests">Tests</TabsTrigger>
+                      <TabsTrigger value="deployment" disabled>Deployment</TabsTrigger>
+                    </TabsList>
+                  </div>
                   
-                  <div className="text-xs text-muted-foreground">
-                    Last saved: {activeProject ? new Date(activeProject.updated_at).toLocaleString() : ''}
+                  <div className="flex items-center gap-4">
+                    <div className="text-xs text-muted-foreground">
+                      Last saved: {activeProject ? new Date(activeProject.updated_at).toLocaleString() : ''}
+                    </div>
+                    <Button size="sm" onClick={handleSaveCode} className="gap-1.5">
+                      <Save className="h-4 w-4" />
+                      Save
+                    </Button>
                   </div>
                 </div>
                 
-                <TabsContent value="code" className="flex-1 border p-0 overflow-hidden">
+                <TabsContent value="code" className="flex-1 p-0 overflow-hidden">
                   <MonacoEditor 
                     value={code} 
                     onChange={setCode} 
                     onEditorMount={handleEditorMount}
                   />
+                </TabsContent>
+                
+                <TabsContent value="tests" className="flex-1 p-0 overflow-hidden">
+                  {verificationResult?.cvl_code ? (
+                    <MonacoEditor 
+                      value={verificationResult.cvl_code} 
+                      options={{ readOnly: true, language: 'plaintext' }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center p-6">
+                        <h3 className="text-lg font-medium mb-2">No CVL code available</h3>
+                        <p className="text-muted-foreground mb-4">
+                          Run an advanced verification to generate CVL code
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </TabsContent>
               </Tabs>
             </div>

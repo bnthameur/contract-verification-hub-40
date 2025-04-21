@@ -120,8 +120,8 @@ export function Sidebar({
   };
 
   return (
-    <div className="group w-64 border-r px-2 py-4 flex flex-col h-[calc(100vh-4rem)]">
-      <div className="flex items-center justify-between mb-2 px-4">
+    <div className="group flex flex-col h-full bg-background border-r">
+      <div className="flex items-center justify-between p-4">
         <h2 className="text-lg font-semibold">Projects</h2>
         <Button 
           variant="ghost" 
@@ -133,8 +133,8 @@ export function Sidebar({
         </Button>
       </div>
       
-      <div className="relative mb-4 px-2">
-        <Search className="absolute left-4 top-2.5 h-4 w-4 text-muted-foreground" />
+      <div className="relative px-4 mb-4">
+        <Search className="absolute left-6 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search projects..."
           className="pl-8"
@@ -145,22 +145,22 @@ export function Sidebar({
       
       <Separator className="my-2" />
       
-      <ScrollArea className="flex-grow px-1">
+      <ScrollArea className="flex-grow px-2 overflow-y-auto">
         <div className="space-y-1 py-2">
           {filteredProjects.length > 0 ? (
             filteredProjects.map((project) => (
               <div 
                 key={project.id} 
                 className={cn(
-                  "flex justify-between items-center pr-2",
-                  project.id === activeProject?.id && "bg-accent rounded-sm"
+                  "flex justify-between items-center rounded-md",
+                  project.id === activeProject?.id ? "bg-accent" : "hover:bg-muted"
                 )}
               >
                 <Button
                   variant="ghost"
                   className={cn(
                     "w-full justify-start font-normal px-4 py-2 h-auto",
-                    project.id === activeProject?.id && "bg-accent text-accent-foreground"
+                    project.id === activeProject?.id && "text-accent-foreground"
                   )}
                   onClick={() => onSelectProject(project)}
                 >
