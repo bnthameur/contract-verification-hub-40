@@ -504,19 +504,14 @@ rule preservesTotalSupply(method f) {
     }
   };
 
-  const handleCancelLogicValidation = () => {
+  const handleCancelLogicValidation = async () => {
     if (verificationResult?.status === VerificationStatus.PENDING) {
-      // Delete the pending verification if user cancels
-      // Fix for the TypeScript error:
-      // Convert the Promise chain to async/await with try/catch
       try {
-        supabase
+        await supabase
           .from('verification_results')
           .delete()
-          .eq('id', verificationResult.id)
-          .then(() => {
-            setVerificationResult(undefined);
-          });
+          .eq('id', verificationResult.id);
+        setVerificationResult(undefined);
       } catch (error) {
         console.error("Error cancelling verification:", error);
       }
@@ -590,7 +585,6 @@ rule preservesTotalSupply(method f) {
     editorRef.current = editor;
   };
 
-  // Helper to generate a contract description based on code content
   const getContractDescription = (code: string): string => {
     if (code.includes("ERC20") || code.includes("balanceOf") || code.includes("transfer(")) {
       return "token contract with ERC20-like functionality";
@@ -621,7 +615,6 @@ rule preservesTotalSupply(method f) {
     setIsDragging(false);
   };
 
-  // Render the resizable layout when a project is active
   const renderProjectContent = () => {
     return (
       <>
@@ -714,7 +707,6 @@ rule preservesTotalSupply(method f) {
     );
   };
 
-  // Render the welcome screen when no project is active
   const renderWelcomeScreen = () => {
     return (
       <div 

@@ -22,12 +22,11 @@ interface VerificationPanelProps {
   onStop?: () => void;
   result?: VerificationResult;
   onNavigateToLine?: (line: number) => void;
+  onSwitchTab?: (tab: string) => void;
 }
 
-// Get API URL from environment or default
 const API_URL = import.meta.env.VITE_API_URL || "https://58efc0c8-52f0-4b94-abcc-024e3f64d36c-backend.lovableproject.com";
 
-// Function to check API availability with improved CORS handling
 const checkApiAvailability = async (): Promise<boolean> => {
   try {
     const response = await fetch(`${API_URL}/`, { 
@@ -37,8 +36,8 @@ const checkApiAvailability = async (): Promise<boolean> => {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      credentials: 'omit', // Don't send credentials to avoid CORS preflight issues
-      cache: 'no-cache' // Prevent caching
+      credentials: 'omit',
+      cache: 'no-cache'
     });
     
     return response.ok;
@@ -54,7 +53,8 @@ export function VerificationPanel({
   onVerify, 
   onStop, 
   result,
-  onNavigateToLine 
+  onNavigateToLine,
+  onSwitchTab
 }: VerificationPanelProps) {
   const [level, setLevel] = useState<VerificationLevel>(VerificationLevel.SIMPLE);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -72,7 +72,6 @@ export function VerificationPanel({
   const warningCount = result?.results.filter(issue => issue.type === 'warning').length || 0;
   const infoCount = result?.results.filter(issue => issue.type === 'info').length || 0;
 
-  // Check API availability when component mounts
   useEffect(() => {
     const checkApi = async () => {
       try {
@@ -95,8 +94,7 @@ export function VerificationPanel({
     
     checkApi();
     
-    // Check API availability periodically
-    const intervalId = setInterval(checkApi, 30000); // Check every 30 seconds
+    const intervalId = setInterval(checkApi, 30000);
     
     return () => clearInterval(intervalId);
   }, []);
@@ -111,89 +109,86 @@ export function VerificationPanel({
       return;
     }
 
-    try {
-      setIsVerifying(true);
-      setApiError(null);
-      
-      // Get auth token for authorization
-      const { data: { session } } = await supabase.auth.getSession();
-      const authToken = session?.access_token;
-      
-      // Create initial verification record
-      const initialResult: Partial<VerificationResult> = {
-        project_id: projectId,
-        level,
-        status: VerificationStatus.RUNNING,
-        results: [],
-        logs: ["Initializing verification..."],
-        created_at: new Date().toISOString(),
-      };
-      
-      const { data: verificationRecord, error: insertError } = await supabase
-        .from('verification_results')
-        .insert(initialResult)
-        .select()
-        .single();
+    if (level === VerificationLevel.ADVANCED && onSwitchTab) {
+      onSwitchTab("logic-validation");
+    } else {
+      try {
+        setIsVerifying(true);
+        setApiError(null);
         
-      if (insertError) throw insertError;
-      
-      // Call the backend API with auth token
-      console.log(`Calling API at: ${API_URL}/analyze`);
-      const response = await fetch(`${API_URL}/analyze`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : ''
-        },
-        mode: 'cors',
-        credentials: 'omit', // Don't send credentials to avoid CORS preflight issues
-        body: JSON.stringify({
-          code,
+        const { data: { session } } = await supabase.auth.getSession();
+        const authToken = session?.access_token;
+        
+        const initialResult: Partial<VerificationResult> = {
           project_id: projectId,
-          auth_token: authToken
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API Error (${response.status}): ${errorText}`);
-      }
-      
-      const data = await response.json();
-      
-      // Refresh to get updated result - this will trigger a reload of results from Supabase
-      onVerify(level);
-      
-      toast({
-        title: "Verification complete",
-        description: `Analysis completed with ${data.issues_count || 0} issues found.`,
-      });
-      
-    } catch (error: any) {
-      console.error("Verification error:", error);
-      setApiError(error.message || "Failed to connect to verification API. Is the backend running?");
-      
-      toast({
-        title: "Verification failed",
-        description: error.message || "An unexpected error occurred",
-        variant: "destructive",
-      });
-      
-      // Update the verification record as failed if it exists
-      if (result?.id) {
-        await supabase
+          level,
+          status: VerificationStatus.RUNNING,
+          results: [],
+          logs: ["Initializing verification..."],
+          created_at: new Date().toISOString(),
+        };
+        
+        const { data: verificationRecord, error: insertError } = await supabase
           .from('verification_results')
-          .update({
-            status: VerificationStatus.FAILED,
-            logs: [...(result.logs || []), `Error: ${error.message}`],
-            completed_at: new Date().toISOString(),
-          })
-          .eq('id', result.id);
+          .insert(initialResult)
+          .select()
+          .single();
+        
+        if (insertError) throw insertError;
+        
+        console.log(`Calling API at: ${API_URL}/analyze`);
+        const response = await fetch(`${API_URL}/analyze`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': authToken ? `Bearer ${authToken}` : ''
+          },
+          mode: 'cors',
+          credentials: 'omit',
+          body: JSON.stringify({
+            code,
+            project_id: projectId,
+            auth_token: authToken
+          }),
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API Error (${response.status}): ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        onVerify(level);
+        
+        toast({
+          title: "Verification complete",
+          description: `Analysis completed with ${data.issues_count || 0} issues found.`,
+        });
+      } catch (error: any) {
+        console.error("Verification error:", error);
+        setApiError(error.message || "Failed to connect to verification API. Is the backend running?");
+        
+        toast({
+          title: "Verification failed",
+          description: error.message || "An unexpected error occurred",
+          variant: "destructive",
+        });
+        
+        if (result?.id) {
+          await supabase
+            .from('verification_results')
+            .update({
+              status: VerificationStatus.FAILED,
+              logs: [...(result.logs || []), `Error: ${error.message}`],
+              completed_at: new Date().toISOString(),
+            })
+            .eq('id', result.id);
+        }
+      } finally {
+        setIsVerifying(false);
       }
-      
-    } finally {
-      setIsVerifying(false);
     }
   };
 

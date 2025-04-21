@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +15,7 @@ interface LogicValidationProps {
   onConfirmLogic: (logicText: string) => Promise<void>;
   onCancel: () => void;
   isLoadingAILogic?: boolean;
+  onLogicConfirmed?: () => void;
 }
 
 const EXAMPLE_SNIPPETS = [
@@ -43,13 +43,13 @@ export function LogicValidation({
   result,
   onConfirmLogic,
   onCancel,
-  isLoadingAILogic = false
+  isLoadingAILogic = false,
+  onLogicConfirmed,
 }: LogicValidationProps) {
   const [logicText, setLogicText] = useState(result?.logic_text || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  // Update logicText when result changes
   useEffect(() => {
     if (result?.logic_text) {
       setLogicText(result.logic_text);
@@ -69,6 +69,7 @@ export function LogicValidation({
     try {
       setIsSubmitting(true);
       await onConfirmLogic(logicText);
+      if (onLogicConfirmed) onLogicConfirmed();
       toast({
         title: "Logic confirmed",
         description: "Your logic validation has been submitted for verification",
