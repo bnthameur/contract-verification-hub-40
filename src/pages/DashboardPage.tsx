@@ -4,10 +4,10 @@ import { ResizableLayout } from "@/components/layout/ResizableLayout";
 import { MonacoEditor } from "@/components/editor/MonacoEditor";
 import { VerificationPanel } from "@/components/verification/VerificationPanel";
 import { LogicValidation } from "@/components/verification/LogicValidation";
-import { Project, VerificationIssue, VerificationLevel, VerificationResult, VerificationStatus } from "@/types";
+import { Project, VerificationResult, VerificationLevel, VerificationStatus } from "@/types";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Save, Upload, FileSymlink, PlusCircle, FileCode, ChevronUp, ChevronDown } from "lucide-react";
+import { ChevronRight, Save, Upload, FileSymlink, PlusCircle, FileCode, File } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -620,9 +620,9 @@ rule preservesTotalSupply(method f) {
       <>
         <ResizableLayout
           sidebarContent={
-            <Sidebar 
-              projects={projects} 
-              activeProject={activeProject} 
+            <Sidebar
+              projects={projects}
+              activeProject={activeProject}
               onSelectProject={setActiveProject}
               onCreateProject={() => setIsCreatingProject(true)}
               onRefreshProjects={fetchProjects}
@@ -630,33 +630,33 @@ rule preservesTotalSupply(method f) {
           }
           mainContent={
             <div className="flex flex-col h-full">
-              <Tabs defaultValue="code" className="flex-1 flex flex-col">
-                <div className="border-b px-6 py-3 flex items-center justify-between bg-card/50">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center text-sm">
-                      <span className="text-muted-foreground">Project:</span>
-                      <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground" />
-                      <span className="font-medium">{activeProject?.name}</span>
-                    </div>
-                    
-                    <TabsList>
-                      <TabsTrigger value="code">Code</TabsTrigger>
-                      <TabsTrigger value="tests">Tests</TabsTrigger>
-                      <TabsTrigger value="deployment" disabled>Deployment</TabsTrigger>
-                    </TabsList>
-                  </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <div className="text-xs text-muted-foreground">
-                      Last saved: {activeProject ? new Date(activeProject.updated_at).toLocaleString() : ''}
-                    </div>
-                    <Button size="sm" onClick={handleSaveCode} className="gap-1.5">
-                      <Save className="h-4 w-4" />
-                      Save
-                    </Button>
+              <div className="border-b px-6 py-3 flex items-center justify-between bg-card/50">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center text-sm">
+                    <span className="text-muted-foreground">Project:</span>
+                    <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground" />
+                    <span className="font-medium">{activeProject?.name}</span>
                   </div>
                 </div>
-                
+
+                <div className="flex items-center gap-4">
+                  <div className="text-xs text-muted-foreground">
+                    Last saved: {activeProject ? new Date(activeProject.updated_at).toLocaleString() : ''}
+                  </div>
+                  <Button size="sm" onClick={handleSaveCode} className="gap-1.5">
+                    <Save className="h-4 w-4" />
+                    Save
+                  </Button>
+                </div>
+              </div>
+
+              <Tabs defaultValue="code" className="flex-1 flex flex-col">
+                <TabsList>
+                  <TabsTrigger value="code">Code</TabsTrigger>
+                  <TabsTrigger value="tests">Tests</TabsTrigger>
+                  <TabsTrigger value="deployment" disabled>Deployment</TabsTrigger>
+                </TabsList>
+
                 <TabsContent value="code" className="flex-1 p-0 overflow-hidden">
                   <MonacoEditor 
                     value={code} 
@@ -664,7 +664,7 @@ rule preservesTotalSupply(method f) {
                     onEditorMount={handleEditorMount}
                   />
                 </TabsContent>
-                
+
                 <TabsContent value="tests" className="flex-1 p-0 overflow-hidden">
                   {verificationResult?.cvl_code ? (
                     <MonacoEditor 
@@ -672,7 +672,7 @@ rule preservesTotalSupply(method f) {
                       onChange={() => {}}
                       options={{
                         readOnly: true,
-                        language: 'plaintext'
+                        language: 'plaintext',
                       }}
                     />
                   ) : (
@@ -685,6 +685,12 @@ rule preservesTotalSupply(method f) {
                       </div>
                     </div>
                   )}
+                </TabsContent>
+
+                <TabsContent value="deployment" className="flex-1 p-0 overflow-hidden">
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    Deployment features coming soon.
+                  </div>
                 </TabsContent>
               </Tabs>
             </div>
@@ -699,7 +705,7 @@ rule preservesTotalSupply(method f) {
                   <TabsTrigger value="verification">Verification</TabsTrigger>
                   <TabsTrigger value="logic-validation">Logic Validation</TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="verification" className="h-full">
                   <VerificationPanel 
                     projectId={activeProject?.id || ''} 
@@ -710,7 +716,7 @@ rule preservesTotalSupply(method f) {
                     onNavigateToLine={handleNavigateToLine}
                   />
                 </TabsContent>
-                
+
                 <TabsContent value="logic-validation" className="h-full">
                   <LogicValidation
                     projectId={activeProject?.id || ''}
@@ -785,11 +791,11 @@ rule preservesTotalSupply(method f) {
     <div className="flex h-screen flex-col">
       <LightRay />
       <Navbar hideUser />
-      
+
       <div className="flex flex-1 overflow-hidden">
         {activeProject ? renderProjectContent() : renderWelcomeScreen()}
       </div>
-      
+
       <ProjectCreationDialog
         open={isCreatingProject}
         onOpenChange={setIsCreatingProject}
