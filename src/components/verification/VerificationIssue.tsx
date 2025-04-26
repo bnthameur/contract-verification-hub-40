@@ -6,17 +6,16 @@ import { VerificationIssue } from "@/types";
 import { AlertTriangle, Code, XCircle, ShieldAlert, ArrowRight, Eye } from "lucide-react";
 import { useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useToast } from "@/hooks/use-toast";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface IssueCardProps {
   issue: VerificationIssue;
   onNavigateToLine?: (line: number) => void;
+  defaultOpen?: boolean;
+  showInDialog?: boolean;
 }
 
-export function IssueCard({ issue, onNavigateToLine }: IssueCardProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const { toast } = useToast();
+export function IssueCard({ issue, onNavigateToLine, defaultOpen = false, showInDialog = false }: IssueCardProps) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
 
   const handleNavigateToLine = () => {
     if (issue.line && onNavigateToLine) {
@@ -24,12 +23,9 @@ export function IssueCard({ issue, onNavigateToLine }: IssueCardProps) {
     }
   };
 
-  const showIssueDetails = () => {
-    toast({
-      title: issue.title || "Issue Details",
-      description: issue.description,
-      variant: "default",
-    });
+  const formatLineNumbers = (lines: number | number[]): string => {
+    if (typeof lines === 'number') return `Line ${lines}`;
+    return lines.map(line => `Line ${line}`).join(', ');
   };
 
   return (
@@ -51,7 +47,7 @@ export function IssueCard({ issue, onNavigateToLine }: IssueCardProps) {
           <div className="flex-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-1 items-center gap-2">
-                <h4 className="font-medium truncate max-w-[200px]" title={issue.title}>
+                <h4 className="font-medium truncate max-w-[300px]" title={issue.title}>
                   {issue.title}
                 </h4>
                 <Badge variant={
@@ -61,39 +57,26 @@ export function IssueCard({ issue, onNavigateToLine }: IssueCardProps) {
                 }>
                   {issue.severity}
                 </Badge>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" onClick={showIssueDetails} className="h-6 w-6 p-0">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>View issue details</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  {issue.file && issue.file.split('/').pop()}
-                </span>
-                {issue.line && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 px-2 text-xs" 
-                    onClick={handleNavigateToLine}
-                  >
-                    Line {issue.line}
-                    <ArrowRight className="ml-1 h-3 w-3" />
-                  </Button>
-                )}
-              </div>
+              {!showInDialog && (
+                <div className="flex items-center gap-2">
+                  {issue.line && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 px-2 text-xs" 
+                      onClick={handleNavigateToLine}
+                    >
+                      {formatLineNumbers(issue.line)}
+                      <ArrowRight className="ml-1 h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
 
-            {(issue.code || issue.suggested_fix || issue.function_name || issue.contract_name) && (
+            {(issue.code || issue.suggested_fix || issue.function_name || issue.contract_name || issue.description) && (
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm" className="mt-2 px-0 h-6 text-xs">
                   {isOpen ? "Show less" : "Show details"}
@@ -106,43 +89,65 @@ export function IssueCard({ issue, onNavigateToLine }: IssueCardProps) {
 
       <CollapsibleContent>
         <div className="px-3 pb-3 pt-0">
-          {issue.suggested_fix && (
-            <div className="mt-2">
-              <h5 className="text-xs font-medium mb-1">Suggested fix:</h5>
-              <pre className="p-2 text-xs bg-muted rounded-md overflow-auto whitespace-pre-wrap">
-                <code className="font-mono">{issue.suggested_fix}</code>
-              </pre>
-            </div>
-          )}
+          <div className="space-y-4">
+            {issue.description && (
+              <div className="text-sm text-muted-foreground">
+                {issue.description}
+              </div>
+            )}
 
-          {issue.code && (
-            <div className="mt-2">
-              <h5 className="text-xs font-medium mb-1 flex items-center">
-                <Code className="h-3 w-3 mr-1" />
-                Code snippet:
-              </h5>
-              <pre className="p-2 text-xs bg-muted rounded-md overflow-auto whitespace-pre-wrap">
-                <code className="font-mono">{issue.code}</code>
-              </pre>
-            </div>
-          )}
+            {issue.line && showInDialog && (
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleNavigateToLine}
+                  className="text-xs"
+                >
+                  {formatLineNumbers(issue.line)}
+                  <ArrowRight className="ml-1 h-3 w-3" />
+                </Button>
+              </div>
+            )}
 
-          {(issue.function_name || issue.contract_name) && (
-            <div className="mt-2 text-xs space-y-1">
-              {issue.function_name && (
-                <div>
-                  <span className="font-medium">Function:</span>{" "}
-                  <span className="text-muted-foreground">{issue.function_name}</span>
-                </div>
-              )}
-              {issue.contract_name && (
-                <div>
-                  <span className="font-medium">Contract:</span>{" "}
-                  <span className="text-muted-foreground">{issue.contract_name}</span>
-                </div>
-              )}
-            </div>
-          )}
+            {issue.suggested_fix && (
+              <div>
+                <h5 className="text-xs font-medium mb-1">Suggested fix:</h5>
+                <pre className="p-2 text-xs bg-muted rounded-md overflow-auto whitespace-pre-wrap">
+                  <code className="font-mono">{issue.suggested_fix}</code>
+                </pre>
+              </div>
+            )}
+
+            {issue.code && (
+              <div>
+                <h5 className="text-xs font-medium mb-1 flex items-center">
+                  <Code className="h-3 w-3 mr-1" />
+                  Code snippet:
+                </h5>
+                <pre className="p-2 text-xs bg-muted rounded-md overflow-auto whitespace-pre-wrap">
+                  <code className="font-mono">{issue.code}</code>
+                </pre>
+              </div>
+            )}
+
+            {(issue.function_name || issue.contract_name) && (
+              <div className="text-xs space-y-1">
+                {issue.function_name && (
+                  <div>
+                    <span className="font-medium">Function:</span>{" "}
+                    <span className="text-muted-foreground">{issue.function_name}</span>
+                  </div>
+                )}
+                {issue.contract_name && (
+                  <div>
+                    <span className="font-medium">Contract:</span>{" "}
+                    <span className="text-muted-foreground">{issue.contract_name}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </CollapsibleContent>
     </Collapsible>
