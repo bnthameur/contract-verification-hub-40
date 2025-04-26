@@ -11,7 +11,6 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 
 interface VerificationIssuesListProps {
   issues: VerificationIssue[];
@@ -27,25 +26,11 @@ export function VerificationIssuesList({
   maxHeight = "100%" 
 }: VerificationIssuesListProps) {
   const [filterType, setFilterType] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState<string>("");
   
   const filteredIssues = issues.filter(issue => {
     if (filterType !== "all" && issue.type !== filterType) {
       return false;
     }
-    
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        issue.title?.toLowerCase().includes(query) ||
-        issue.description?.toLowerCase().includes(query) ||
-        (issue.code?.toLowerCase().includes(query)) ||
-        (issue.function_name?.toLowerCase().includes(query)) ||
-        (issue.contract_name?.toLowerCase().includes(query)) ||
-        (issue.suggested_fix?.toLowerCase().includes(query))
-      );
-    }
-    
     return true;
   });
   
@@ -69,7 +54,7 @@ export function VerificationIssuesList({
   
   return (
     <div className={`flex flex-col h-full ${className}`}>
-      <div className="flex gap-2 mb-3">
+      <div className="flex items-center justify-between mb-3">
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-32">
             <SelectValue placeholder="Filter by" />
@@ -82,16 +67,9 @@ export function VerificationIssuesList({
           </SelectContent>
         </Select>
         
-        <Input
-          placeholder="Search issues..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1"
-        />
-      </div>
-      
-      <div className="text-sm text-muted-foreground mb-2">
-        {sortedIssues.length} {sortedIssues.length === 1 ? 'issue' : 'issues'} found
+        <div className="text-sm text-muted-foreground">
+          {sortedIssues.length} {sortedIssues.length === 1 ? 'issue' : 'issues'} found
+        </div>
       </div>
       
       <ScrollArea className="flex-1" style={{ maxHeight }}>
@@ -100,7 +78,6 @@ export function VerificationIssuesList({
             <IssueCard 
               key={index} 
               issue={issue} 
-
               onNavigateToLine={onNavigateToLine}
             />
           ))}

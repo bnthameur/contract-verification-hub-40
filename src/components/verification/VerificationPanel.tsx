@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VerificationIssue, VerificationLevel, VerificationResult, VerificationStatus } from "@/types";
 import { 
   CheckCircle, AlertTriangle, XCircle, Play, Loader2, Terminal, 
-  Shield, ShieldAlert, ShieldCheck, Square 
+  Shield, ShieldAlert, ShieldCheck, Square, ExternalLink, History
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { VerificationIssuesList } from "./VerificationIssuesList";
 import { Textarea } from "@/components/ui/textarea";
+import { Link } from "react-router-dom";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface VerificationPanelProps {
   projectId: string;
@@ -73,18 +75,19 @@ export function VerificationPanel({
   const isComplete = result?.status === VerificationStatus.COMPLETED;
   const isFailed = result?.status === VerificationStatus.FAILED;
   const isAwaitingConfirmation = result?.status === VerificationStatus.AWAITING_CONFIRMATION;
-  // Replace lines 77-80 with this safer version
-const hasErrors = Array.isArray(result?.results) && 
-result.results.some(issue => issue.type === 'error');
 
-const errorCount = Array.isArray(result?.results) ? 
-result.results.filter(issue => issue.type === 'error').length : 0;
+  const hasErrors = Array.isArray(result?.results) && 
+    result.results.some(issue => issue.type === 'error');
 
-const warningCount = Array.isArray(result?.results) ? 
-result.results.filter(issue => issue.type === 'warning').length : 0;
+  const errorCount = Array.isArray(result?.results) ? 
+    result.results.filter(issue => issue.type === 'error').length : 0;
 
-const infoCount = Array.isArray(result?.results) ? 
-result.results.filter(issue => issue.type === 'info').length : 0;
+  const warningCount = Array.isArray(result?.results) ? 
+    result.results.filter(issue => issue.type === 'warning').length : 0;
+
+  const infoCount = Array.isArray(result?.results) ? 
+    result.results.filter(issue => issue.type === 'info').length : 0;
+
   useEffect(() => {
     const checkApi = async () => {
       try {
@@ -112,20 +115,16 @@ result.results.filter(issue => issue.type === 'info').length : 0;
     return () => clearInterval(intervalId);
   }, []);
 
-  // Update specifications when result changes and has specs draft
   useEffect(() => {
     if (result?.specs_draft && isAwaitingConfirmation) {
       try {
-        // Parse JSON if needed
         const parsedSpecs = typeof result.specs_draft === 'string' 
           ? JSON.parse(result.specs_draft) 
           : result.specs_draft;
         
-        // Extract content if it exists in a specific format
         const specContent = parsedSpecs.content || parsedSpecs;
         setSpecificationsDraft(typeof specContent === 'string' ? specContent : JSON.stringify(specContent, null, 2));
         
-        // Switch to logic tab
         if (onSwitchTab) {
           onSwitchTab("logic-validation");
           setCurrentTab("logic-validation");
@@ -154,7 +153,6 @@ result.results.filter(issue => issue.type === 'info').length : 0;
         const { data: { session } } = await supabase.auth.getSession();
         const authToken = session?.access_token;
         
-        // Call deep verification endpoint
         const response = await fetch(`${API_URL}/verify/deep`, {
           method: 'POST',
           headers: {
@@ -179,7 +177,6 @@ result.results.filter(issue => issue.type === 'info').length : 0;
           description: "Generating specifications for your contract...",
         });
         
-        // Call onVerify to trigger any parent component logic
         onVerify(level);
         
       } catch (error: any) {
@@ -195,7 +192,6 @@ result.results.filter(issue => issue.type === 'info').length : 0;
         setIsVerifying(false);
       }
     } else {
-      // Handle simple verification
       try {
         setIsVerifying(true);
         setApiError(null);
@@ -203,7 +199,6 @@ result.results.filter(issue => issue.type === 'info').length : 0;
         const { data: { session } } = await supabase.auth.getSession();
         const authToken = session?.access_token;
         
-        // Call simple verification endpoint
         const response = await fetch(`${API_URL}/verify/simple`, {
           method: 'POST',
           headers: {
@@ -265,7 +260,6 @@ result.results.filter(issue => issue.type === 'info').length : 0;
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token;
       
-      // Send specifications to confirm endpoint
       const response = await fetch(`${API_URL}/verify/confirm/${result.id}`, {
         method: 'POST',
         headers: {
@@ -285,7 +279,6 @@ result.results.filter(issue => issue.type === 'info').length : 0;
       
       const data = await response.json();
       
-      // Call onVerify to trigger any parent component logic for refreshing verification status
       onVerify(VerificationLevel.DEEP);
       
       toast({
@@ -293,7 +286,6 @@ result.results.filter(issue => issue.type === 'info').length : 0;
         description: "Deep verification is now running with your specifications",
       });
       
-      // Switch back to main verification tab
       if (onSwitchTab) {
         onSwitchTab("verification");
         setCurrentTab("verification");
@@ -311,53 +303,76 @@ result.results.filter(issue => issue.type === 'info').length : 0;
       setIsConfirmingLogic(false);
     }
   };
-  // Add this after handleConfirmLogic function
-useEffect(() => {
-  // Only poll if there's a verification running and we have a result ID
-  if ((isRunning || isPending) && result?.id) {
-    const interval = setInterval(async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const authToken = session?.access_token;
-        
-        const response = await fetch(`${API_URL}/verification/${result.id}`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Authorization': authToken ? `Bearer ${authToken}` : ''
-          },
-          mode: 'cors',
-          credentials: 'omit',
-        });
-        
-        if (!response.ok) {
-          throw new Error(`API Error (${response.status})`);
+
+  useEffect(() => {
+    if ((isRunning || isPending) && result?.id) {
+      const interval = setInterval(async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const authToken = session?.access_token;
+          
+          const response = await fetch(`${API_URL}/verification/${result.id}`, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': authToken ? `Bearer ${authToken}` : ''
+            },
+            mode: 'cors',
+            credentials: 'omit',
+          });
+          
+          if (!response.ok) {
+            throw new Error(`API Error (${response.status})`);
+          }
+          
+          const data = await response.json();
+          
+          if (data.status !== result.status) {
+            onVerify(level);
+          }
+        } catch (error) {
+          console.error("Error polling verification status:", error);
         }
-        
-        const data = await response.json();
-        
-        // Update parent component with new verification result
-        if (data.status !== result.status) {
-          onVerify(level);  // Trigger parent refresh
-        }
-      } catch (error) {
-        console.error("Error polling verification status:", error);
-      }
-    }, 5000);  // Poll every 5 seconds
-    
-    return () => clearInterval(interval);
-  }
-}, [isRunning, isPending, result?.id, result?.status]);
+      }, 5000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [isRunning, isPending, result?.id, result?.status]);
+
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle className="flex items-center">
-          <Shield className="h-5 w-5 mr-2 text-primary" />
-          Verification Tools
-        </CardTitle>
-        <CardDescription>
-          Verify your Solidity code for errors and vulnerabilities
-        </CardDescription>
+        <div className="flex justify-between items-center">
+          <div>
+            <CardTitle className="flex items-center">
+              <Shield className="h-5 w-5 mr-2 text-primary" />
+              Verification Tools
+            </CardTitle>
+            <CardDescription>
+              Verify your Solidity code for errors and vulnerabilities
+            </CardDescription>
+          </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  asChild
+                  className="gap-1.5"
+                >
+                  <Link to={`/verification-history/${projectId}`}>
+                    <History className="h-4 w-4" />
+                    View History
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View full verification history</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </CardHeader>
       <CardContent>
         {currentTab === "verification" && (
@@ -413,29 +428,31 @@ useEffect(() => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Verification in progress...</span>
                   <span className="text-sm text-muted-foreground">
-                    {result?.logs.length || 0} steps
+                    {result?.logs?.length || 0} steps
                   </span>
                 </div>
-                <Progress value={result?.logs.length ? (result.logs.length / 10) * 100 : 10} className="h-2" />
+                <Progress value={result?.logs?.length ? (result.logs.length / 10) * 100 : 10} className="h-2" />
               </div>
             )}
 
             {(isComplete || isFailed) && (
               <Tabs defaultValue="issues">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="issues" className="flex items-center gap-1.5">
-                    <AlertTriangle className="h-4 w-4" />
-                    Issues {result?.results.length ? `(${result.results.length})` : ''}
-                  </TabsTrigger>
-                  <TabsTrigger value="logs" className="flex items-center gap-1.5">
-                    <Terminal className="h-4 w-4" />
-                    Logs
-                  </TabsTrigger>
-                  <TabsTrigger value="summary" className="flex items-center gap-1.5">
-                    <CheckCircle className="h-4 w-4" />
-                    Summary
-                  </TabsTrigger>
-                </TabsList>
+                <div className="flex items-center justify-between mb-2">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="issues" className="flex items-center gap-1.5">
+                      <AlertTriangle className="h-4 w-4" />
+                      Issues {result?.results?.length ? `(${result.results.length})` : ''}
+                    </TabsTrigger>
+                    <TabsTrigger value="logs" className="flex items-center gap-1.5">
+                      <Terminal className="h-4 w-4" />
+                      Logs
+                    </TabsTrigger>
+                    <TabsTrigger value="summary" className="flex items-center gap-1.5">
+                      <CheckCircle className="h-4 w-4" />
+                      Summary
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
                 
                 <TabsContent value="issues" className="h-96">
                   {Array.isArray(result?.results) ? (

@@ -3,23 +3,33 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { VerificationIssue } from "@/types";
-import { AlertTriangle, Code, XCircle, ShieldAlert, ArrowRight } from "lucide-react";
+import { AlertTriangle, Code, XCircle, ShieldAlert, ArrowRight, Eye } from "lucide-react";
 import { useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface IssueCardProps {
   issue: VerificationIssue;
   onNavigateToLine?: (line: number) => void;
 }
 
-// IssueCard.tsx
 export function IssueCard({ issue, onNavigateToLine }: IssueCardProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const { toast } = useToast();
 
   const handleNavigateToLine = () => {
     if (issue.line && onNavigateToLine) {
       onNavigateToLine(issue.line);
     }
+  };
+
+  const showIssueDetails = () => {
+    toast({
+      title: issue.title || "Issue Details",
+      description: issue.description,
+      variant: "default",
+    });
   };
 
   return (
@@ -30,7 +40,6 @@ export function IssueCard({ issue, onNavigateToLine }: IssueCardProps) {
     >
       <div className="p-3">
         <div className="flex items-start gap-2">
-          {/* Icon mapping remains the same */}
           {issue.type === 'error' ? (
             <XCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
           ) : issue.type === 'warning' ? (
@@ -40,9 +49,9 @@ export function IssueCard({ issue, onNavigateToLine }: IssueCardProps) {
           )}
 
           <div className="flex-1">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-1 items-center gap-2">
-                <h4 className="font-medium">
+                <h4 className="font-medium truncate max-w-[200px]" title={issue.title}>
                   {issue.title}
                 </h4>
                 <Badge variant={
@@ -52,30 +61,37 @@ export function IssueCard({ issue, onNavigateToLine }: IssueCardProps) {
                 }>
                   {issue.severity}
                 </Badge>
-                <Badge variant="secondary" className="capitalize">
-                  Confidence: {issue.confidence?.toLowerCase() || 'unknown'}
-                </Badge>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" onClick={showIssueDetails} className="h-6 w-6 p-0">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>View issue details</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
 
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">
-                  {issue.file}
+                  {issue.file && issue.file.split('/').pop()}
                 </span>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-6 px-2 text-xs" 
-                  onClick={handleNavigateToLine}
-                >
-                  Line {issue.line}
-                  <ArrowRight className="ml-1 h-3 w-3" />
-                </Button>
+                {issue.line && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 px-2 text-xs" 
+                    onClick={handleNavigateToLine}
+                  >
+                    Line {issue.line}
+                    <ArrowRight className="ml-1 h-3 w-3" />
+                  </Button>
+                )}
               </div>
             </div>
-
-            <p className="text-sm text-muted-foreground mt-2">
-              {issue.description}
-            </p>
 
             {(issue.code || issue.suggested_fix || issue.function_name || issue.contract_name) && (
               <CollapsibleTrigger asChild>

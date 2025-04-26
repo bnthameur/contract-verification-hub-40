@@ -1,4 +1,3 @@
-
 export interface User {
   id: string;
   email: string;
@@ -17,9 +16,10 @@ export interface Project {
 }
 
 export enum VerificationLevel {
-  SIMPLE = 'simple',
-  DEEP = 'deep',
-  FORMAL = 'formal'
+  SIMPLE = "simple",
+  DEEP = "deep",
+  ADVANCED = "advanced",
+  FORMAL = "formal"
 }
 
 export enum VerificationStatus {
@@ -33,22 +33,15 @@ export enum VerificationStatus {
 export interface VerificationResult {
   id: string;
   project_id: string;
-  level: string;
-  status: string;
-  results: any; // or a more specific type if you have one
-  logs?: string[];
+  level: VerificationLevel;
+  status: VerificationStatus;
   created_at: string;
   completed_at?: string;
-
-
-  // Add the missing properties from your database schema
-  specs_draft?: string;
-  structured_results?: any;
-  phases?: any;
-  error_message?: string;
-  specs_used?: string;
-  options?: any;
-  priority_focus?: string;
+  results: VerificationIssue[];
+  logs: string[];
+  cvl_code?: string;
+  logic_text?: string;
+  specs_draft?: string | any;
 }
 
 export interface VerificationIssue {
@@ -60,7 +53,6 @@ export interface VerificationIssue {
   severity: 'critical' | 'high' | 'medium' | 'low';
   confidence: 'High' | 'Medium' | 'Low';
   description: string;
-  // Keep existing optional fields if still relevant
   code?: string;
   function_name?: string;
   contract_name?: string;

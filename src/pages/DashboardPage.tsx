@@ -322,7 +322,7 @@ export default function DashboardPage() {
   const handleStartVerification = async (level: VerificationLevel) => {
     await handleSaveCode();
     
-    if (level === VerificationLevel.ADVANCED) {
+    if (level === VerificationLevel.DEEP) {
       setActiveVerificationTab("logic-validation");
       setIsLoadingAILogic(true);
       
@@ -336,7 +336,7 @@ export default function DashboardPage() {
           // Create initial verification record with the AI-generated logic
           const initialResult: Partial<VerificationResult> = {
             project_id: activeProject.id,
-            level: VerificationLevel.ADVANCED,
+            level: VerificationLevel.DEEP,
             status: VerificationStatus.PENDING,
             results: [],
             logs: ["Generated initial contract logic."],
