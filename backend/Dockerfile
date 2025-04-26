@@ -1,25 +1,32 @@
+FROM ubuntu:22.04
 
-FROM python:3.10-slim
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3 python3-pip python3-venv \
+    openjdk-11-jdk \
+    git wget curl unzip \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Slither and its dependencies
-RUN apt-get update && apt-get install -y git python3-pip
-RUN pip3 install slither-analyzer
+# Install solc-select for Solidity compiler
+RUN pip3 install solc-select
+RUN solc-select install 0.8.0 && solc-select use 0.8.0
 
-# Set working directory
-WORKDIR /app
+# Install Z3 solver
+RUN wget https://github.com/Z3Prover/z3/releases/download/z3-4.12.2/z3-4.12.2-x64-glibc-2.35.zip \
+    && unzip z3-4.12.2-x64-glibc-2.35.zip \
+    && mv z3-4.12.2-x64-glibc-2.35/bin/z3 /usr/bin/ \
+    && rm -rf z3-4.12.2-x64-glibc-2.35*
 
-# Copy requirements and install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Clone Certora Prover
+RUN git clone https://github.com/Certora/CertoraProver.git /CertoraProver
+WORKDIR /CertoraProver
 
-# Copy application code
-COPY . .
+# Set up Python virtual environment for Certora
+RUN python3 -m venv .venv
+RUN . .venv/bin/activate && pip install certora-cli
 
-# Expose port
-EXPOSE 8000
+# Add Z3 to PATH
+ENV PATH="/usr/bin:$PATH"
 
-# Environment variables with defaults for CORS
-ENV ALLOWED_ORIGINS="*"
-
-# Start the application (bind to all interfaces)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Command to keep container running
+CMD ["/bin/bash"]

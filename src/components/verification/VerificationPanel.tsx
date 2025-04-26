@@ -14,6 +14,7 @@ import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { VerificationIssuesList } from "./VerificationIssuesList";
+import { Textarea } from "@/components/ui/textarea";
 
 interface VerificationPanelProps {
   projectId: string;
@@ -25,11 +26,12 @@ interface VerificationPanelProps {
   onSwitchTab?: (tab: string) => void;
 }
 
-const API_URL = import.meta.env.VITE_API_URL || "https://58efc0c8-52f0-4b94-abcc-024e3f64d36c-backend.lovableproject.com";
+// Update API URL to match the running backend
+const API_URL = "http://127.0.0.1:8000";
 
 const checkApiAvailability = async (): Promise<boolean> => {
   try {
-    const response = await fetch(`${API_URL}/`, { 
+    const response = await fetch(`${API_URL}/health`, { 
       method: 'GET',
       mode: 'cors',
       headers: { 
@@ -60,18 +62,29 @@ export function VerificationPanel({
   const [isVerifying, setIsVerifying] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
+  const [currentTab, setCurrentTab] = useState("verification");
+  const [specifications, setSpecifications] = useState("");
+  const [specificationsDraft, setSpecificationsDraft] = useState("");
+  const [isConfirmingLogic, setIsConfirmingLogic] = useState(false);
   const { toast } = useToast();
   
   const isPending = result?.status === VerificationStatus.PENDING;
   const isRunning = result?.status === VerificationStatus.RUNNING || isVerifying;
   const isComplete = result?.status === VerificationStatus.COMPLETED;
   const isFailed = result?.status === VerificationStatus.FAILED;
-  
-  const hasErrors = result?.results.some(issue => issue.type === 'error');
-  const errorCount = result?.results.filter(issue => issue.type === 'error').length || 0;
-  const warningCount = result?.results.filter(issue => issue.type === 'warning').length || 0;
-  const infoCount = result?.results.filter(issue => issue.type === 'info').length || 0;
+  const isAwaitingConfirmation = result?.status === VerificationStatus.AWAITING_CONFIRMATION;
+  // Replace lines 77-80 with this safer version
+const hasErrors = Array.isArray(result?.results) && 
+result.results.some(issue => issue.type === 'error');
 
+const errorCount = Array.isArray(result?.results) ? 
+result.results.filter(issue => issue.type === 'error').length : 0;
+
+const warningCount = Array.isArray(result?.results) ? 
+result.results.filter(issue => issue.type === 'warning').length : 0;
+
+const infoCount = Array.isArray(result?.results) ? 
+result.results.filter(issue => issue.type === 'info').length : 0;
   useEffect(() => {
     const checkApi = async () => {
       try {
@@ -99,6 +112,31 @@ export function VerificationPanel({
     return () => clearInterval(intervalId);
   }, []);
 
+  // Update specifications when result changes and has specs draft
+  useEffect(() => {
+    if (result?.specs_draft && isAwaitingConfirmation) {
+      try {
+        // Parse JSON if needed
+        const parsedSpecs = typeof result.specs_draft === 'string' 
+          ? JSON.parse(result.specs_draft) 
+          : result.specs_draft;
+        
+        // Extract content if it exists in a specific format
+        const specContent = parsedSpecs.content || parsedSpecs;
+        setSpecificationsDraft(typeof specContent === 'string' ? specContent : JSON.stringify(specContent, null, 2));
+        
+        // Switch to logic tab
+        if (onSwitchTab) {
+          onSwitchTab("logic-validation");
+          setCurrentTab("logic-validation");
+        }
+      } catch (error) {
+        console.error("Error parsing specifications:", error);
+        setSpecificationsDraft(JSON.stringify(result.specs_draft, null, 2));
+      }
+    }
+  }, [result, onSwitchTab]);
+
   const handleStartVerification = async () => {
     if (!projectId || !code) {
       toast({
@@ -109,35 +147,15 @@ export function VerificationPanel({
       return;
     }
 
-    if (level === VerificationLevel.ADVANCED && onSwitchTab) {
-      onSwitchTab("logic-validation");
-    } else {
+    if (level === VerificationLevel.DEEP && onSwitchTab) {
+      setIsVerifying(true);
+      
       try {
-        setIsVerifying(true);
-        setApiError(null);
-        
         const { data: { session } } = await supabase.auth.getSession();
         const authToken = session?.access_token;
         
-        const initialResult: Partial<VerificationResult> = {
-          project_id: projectId,
-          level,
-          status: VerificationStatus.RUNNING,
-          results: [],
-          logs: ["Initializing verification..."],
-          created_at: new Date().toISOString(),
-        };
-        
-        const { data: verificationRecord, error: insertError } = await supabase
-          .from('verification_results')
-          .insert(initialResult)
-          .select()
-          .single();
-        
-        if (insertError) throw insertError;
-        
-        console.log(`Calling API at: ${API_URL}/analyze`);
-        const response = await fetch(`${API_URL}/analyze`, {
+        // Call deep verification endpoint
+        const response = await fetch(`${API_URL}/verify/deep`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -146,11 +164,56 @@ export function VerificationPanel({
           },
           mode: 'cors',
           credentials: 'omit',
-          body: JSON.stringify({
-            code,
-            project_id: projectId,
-            auth_token: authToken
-          }),
+          body: JSON.stringify({ project_id: projectId }),
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API Error (${response.status}): ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        toast({
+          title: "Processing started",
+          description: "Generating specifications for your contract...",
+        });
+        
+        // Call onVerify to trigger any parent component logic
+        onVerify(level);
+        
+      } catch (error: any) {
+        console.error("Deep verification error:", error);
+        setApiError(error.message || "Failed to start deep verification.");
+        
+        toast({
+          title: "Verification failed",
+          description: error.message || "An unexpected error occurred",
+          variant: "destructive",
+        });
+      } finally {
+        setIsVerifying(false);
+      }
+    } else {
+      // Handle simple verification
+      try {
+        setIsVerifying(true);
+        setApiError(null);
+        
+        const { data: { session } } = await supabase.auth.getSession();
+        const authToken = session?.access_token;
+        
+        // Call simple verification endpoint
+        const response = await fetch(`${API_URL}/verify/simple`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': authToken ? `Bearer ${authToken}` : ''
+          },
+          mode: 'cors',
+          credentials: 'omit',
+          body: JSON.stringify({ project_id: projectId }),
         });
         
         if (!response.ok) {
@@ -163,29 +226,18 @@ export function VerificationPanel({
         onVerify(level);
         
         toast({
-          title: "Verification complete",
-          description: `Analysis completed with ${data.issues_count || 0} issues found.`,
+          title: "Verification started",
+          description: "Analysis is running in the background.",
         });
       } catch (error: any) {
         console.error("Verification error:", error);
-        setApiError(error.message || "Failed to connect to verification API. Is the backend running?");
+        setApiError(error.message || "Failed to connect to verification API.");
         
         toast({
           title: "Verification failed",
           description: error.message || "An unexpected error occurred",
           variant: "destructive",
         });
-        
-        if (result?.id) {
-          await supabase
-            .from('verification_results')
-            .update({
-              status: VerificationStatus.FAILED,
-              logs: [...(result.logs || []), `Error: ${error.message}`],
-              completed_at: new Date().toISOString(),
-            })
-            .eq('id', result.id);
-        }
       } finally {
         setIsVerifying(false);
       }
@@ -197,6 +249,105 @@ export function VerificationPanel({
     onStop();
   };
 
+  const handleConfirmLogic = async () => {
+    if (!result?.id) {
+      toast({
+        title: "Confirmation failed",
+        description: "No active verification session",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsConfirmingLogic(true);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token;
+      
+      // Send specifications to confirm endpoint
+      const response = await fetch(`${API_URL}/verify/confirm/${result.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': authToken ? `Bearer ${authToken}` : ''
+        },
+        mode: 'cors',
+        credentials: 'omit',
+        body: JSON.stringify({ specifications: specificationsDraft }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API Error (${response.status}): ${errorText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Call onVerify to trigger any parent component logic for refreshing verification status
+      onVerify(VerificationLevel.DEEP);
+      
+      toast({
+        title: "Logic confirmed",
+        description: "Deep verification is now running with your specifications",
+      });
+      
+      // Switch back to main verification tab
+      if (onSwitchTab) {
+        onSwitchTab("verification");
+        setCurrentTab("verification");
+      }
+      
+    } catch (error: any) {
+      console.error("Logic confirmation error:", error);
+      
+      toast({
+        title: "Confirmation failed",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConfirmingLogic(false);
+    }
+  };
+  // Add this after handleConfirmLogic function
+useEffect(() => {
+  // Only poll if there's a verification running and we have a result ID
+  if ((isRunning || isPending) && result?.id) {
+    const interval = setInterval(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const authToken = session?.access_token;
+        
+        const response = await fetch(`${API_URL}/verification/${result.id}`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': authToken ? `Bearer ${authToken}` : ''
+          },
+          mode: 'cors',
+          credentials: 'omit',
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API Error (${response.status})`);
+        }
+        
+        const data = await response.json();
+        
+        // Update parent component with new verification result
+        if (data.status !== result.status) {
+          onVerify(level);  // Trigger parent refresh
+        }
+      } catch (error) {
+        console.error("Error polling verification status:", error);
+      }
+    }, 5000);  // Poll every 5 seconds
+    
+    return () => clearInterval(interval);
+  }
+}, [isRunning, isPending, result?.id, result?.status]);
   return (
     <Card className="w-full">
       <CardHeader>
@@ -209,198 +360,259 @@ export function VerificationPanel({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          <div className="flex flex-col space-y-2">
-            <label htmlFor="verification-level" className="text-sm font-medium">
-              Verification Level
-            </label>
-            <Select
-              value={level}
-              onValueChange={(value) => setLevel(value as VerificationLevel)}
-              disabled={isRunning}
-            >
-              <SelectTrigger id="verification-level">
-                <SelectValue placeholder="Select level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={VerificationLevel.SIMPLE}>
-                  Simple (Slither)
-                </SelectItem>
-                <SelectItem value={VerificationLevel.MEDIUM}>
-                  Medium (Z3 SMT)
-                </SelectItem>
-                <SelectItem value={VerificationLevel.ADVANCED} disabled>
-                  Advanced (K Framework) - Coming Soon
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {apiAvailable === false && (
-            <div className="bg-destructive/10 text-destructive p-3 rounded-md text-sm border border-destructive/20">
-              <p className="font-medium">Verification API Unreachable</p>
-              <p className="mt-1">The verification service is currently unavailable. Please try again later.</p>
-              <p className="mt-2 text-xs">
-                API endpoint: {API_URL}
-              </p>
+        {currentTab === "verification" && (
+          <div className="space-y-4">
+            <div className="flex flex-col space-y-2">
+              <label htmlFor="verification-level" className="text-sm font-medium">
+                Verification Level
+              </label>
+              <Select
+                value={level}
+                onValueChange={(value) => setLevel(value as VerificationLevel)}
+                disabled={isRunning}
+              >
+                <SelectTrigger id="verification-level">
+                  <SelectValue placeholder="Select level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={VerificationLevel.SIMPLE}>
+                    Simple
+                  </SelectItem>
+                  <SelectItem value={VerificationLevel.DEEP}>
+                    Deep
+                  </SelectItem>
+                  <SelectItem value={VerificationLevel.FORMAL} disabled>
+                    Formal 🔒
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          )}
 
-          {apiError && (
-            <div className="bg-destructive/10 text-destructive p-3 rounded-md text-sm border border-destructive/20">
-              <p className="font-medium">API Error</p>
-              <p className="mt-1">{apiError}</p>
-              <p className="mt-2 text-xs">
-                API endpoint: {API_URL}
-              </p>
-            </div>
-          )}
-
-          {(isRunning || isPending) && (
-            <div className="space-y-2 py-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Verification in progress...</span>
-                <span className="text-sm text-muted-foreground">
-                  {result?.logs.length || 0} steps
-                </span>
+            {apiAvailable === false && (
+              <div className="bg-destructive/10 text-destructive p-3 rounded-md text-sm border border-destructive/20">
+                <p className="font-medium">Verification API Unreachable</p>
+                <p className="mt-1">The verification service is currently unavailable. Please try again later.</p>
+                <p className="mt-2 text-xs">
+                  API endpoint: {API_URL}
+                </p>
               </div>
-              <Progress value={result?.logs.length ? (result.logs.length / 10) * 100 : 10} className="h-2" />
-            </div>
-          )}
+            )}
 
-          {(isComplete || isFailed) && (
-            <Tabs defaultValue="issues">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="issues" className="flex items-center gap-1.5">
-                  <AlertTriangle className="h-4 w-4" />
-                  Issues {result?.results.length ? `(${result.results.length})` : ''}
-                </TabsTrigger>
-                <TabsTrigger value="logs" className="flex items-center gap-1.5">
-                  <Terminal className="h-4 w-4" />
-                  Logs
-                </TabsTrigger>
-                <TabsTrigger value="summary" className="flex items-center gap-1.5">
-                  <CheckCircle className="h-4 w-4" />
-                  Summary
-                </TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="issues" className="h-96">
-                {result?.results && (
-                  <VerificationIssuesList 
-                    issues={result.results} 
-                    onNavigateToLine={onNavigateToLine}
-                    maxHeight="calc(100vh - 400px)"
-                  />
-                )}
-              </TabsContent>
-              
-              <TabsContent value="logs" className="h-96">
-                <ScrollArea className="h-full rounded-md border bg-muted/50 p-4 font-mono text-sm">
-                  {result?.logs && result.logs.length > 0 ? (
-                    <div className="space-y-1">
-                      {result.logs.map((log, index) => (
-                        <div key={index} className="text-xs">
-                          <span className="text-muted-foreground">[{index + 1}]</span> {log}
-                        </div>
-                      ))}
-                    </div>
+            {apiError && (
+              <div className="bg-destructive/10 text-destructive p-3 rounded-md text-sm border border-destructive/20">
+                <p className="font-medium">API Error</p>
+                <p className="mt-1">{apiError}</p>
+                <p className="mt-2 text-xs">
+                  API endpoint: {API_URL}
+                </p>
+              </div>
+            )}
+
+            {(isRunning || isPending) && (
+              <div className="space-y-2 py-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Verification in progress...</span>
+                  <span className="text-sm text-muted-foreground">
+                    {result?.logs.length || 0} steps
+                  </span>
+                </div>
+                <Progress value={result?.logs.length ? (result.logs.length / 10) * 100 : 10} className="h-2" />
+              </div>
+            )}
+
+            {(isComplete || isFailed) && (
+              <Tabs defaultValue="issues">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="issues" className="flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4" />
+                    Issues {result?.results.length ? `(${result.results.length})` : ''}
+                  </TabsTrigger>
+                  <TabsTrigger value="logs" className="flex items-center gap-1.5">
+                    <Terminal className="h-4 w-4" />
+                    Logs
+                  </TabsTrigger>
+                  <TabsTrigger value="summary" className="flex items-center gap-1.5">
+                    <CheckCircle className="h-4 w-4" />
+                    Summary
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="issues" className="h-96">
+                  {Array.isArray(result?.results) ? (
+                    <VerificationIssuesList 
+                      issues={result.results} 
+                      onNavigateToLine={onNavigateToLine}
+                      maxHeight="calc(100vh - 400px)"
+                    />
                   ) : (
                     <div className="flex h-full items-center justify-center text-muted-foreground">
-                      No logs available
+                      No issues found or results not available
                     </div>
                   )}
-                </ScrollArea>
-              </TabsContent>
-              
-              <TabsContent value="summary" className="h-96">
-                <div className="rounded-md border p-4 h-full">
-                  <div className="flex flex-col h-full justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-medium">Verification Summary</h3>
-                        <Badge variant={hasErrors ? "destructive" : "secondary"}>
-                          {hasErrors ? "Issues Found" : "Passed"}
-                        </Badge>
+                </TabsContent>
+                
+                <TabsContent value="logs" className="h-96">
+                  <ScrollArea className="h-full rounded-md border bg-muted/50 p-4 font-mono text-sm">
+                    {result?.logs && result.logs.length > 0 ? (
+                      <div className="space-y-1">
+                        {result.logs.map((log, index) => (
+                          <div key={index} className="text-xs">
+                            <span className="text-muted-foreground">[{index + 1}]</span> {log}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-muted-foreground">
+                        No logs available
+                      </div>
+                    )}
+                  </ScrollArea>
+                </TabsContent>
+                
+                <TabsContent value="summary" className="h-96">
+                  <div className="rounded-md border p-4 h-full">
+                    <div className="flex flex-col h-full justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-medium">Verification Summary</h3>
+                          <Badge variant={hasErrors ? "destructive" : "secondary"}>
+                            {hasErrors ? "Issues Found" : "Passed"}
+                          </Badge>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm">Verification Level:</span>
+                            <span className="font-medium">{result?.level}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm">Total Issues:</span>
+                            <span className="font-medium">
+                              {Array.isArray(result?.results) ? result.results.length : 0}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm">Errors:</span>
+                            <Badge variant="outline" className="bg-red-500/10 text-red-500 hover:bg-red-500/20">
+                              {errorCount}
+                            </Badge>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm">Warnings:</span>
+                            <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20">
+                              {warningCount}
+                            </Badge>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm">Infos:</span>
+                            <Badge variant="outline" className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20">
+                              {infoCount}
+                            </Badge>
+                          </div>
+                        </div>
                       </div>
                       
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Verification Level:</span>
-                          <span className="font-medium">{result?.level}</span>
+                      <div className="mt-4 pt-4 border-t">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Completed at:</span>
+                          <span>{result?.completed_at ? new Date(result.completed_at).toLocaleString() : 'N/A'}</span>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Total Issues:</span>
-                          <span className="font-medium">{result?.results.length || 0}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Errors:</span>
-                          <Badge variant="outline" className="bg-red-500/10 text-red-500 hover:bg-red-500/20">
-                            {errorCount}
-                          </Badge>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Warnings:</span>
-                          <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20">
-                            {warningCount}
-                          </Badge>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Infos:</span>
-                          <Badge variant="outline" className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20">
-                            {infoCount}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 pt-4 border-t">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Completed at:</span>
-                        <span>{result?.completed_at ? new Date(result.completed_at).toLocaleString() : 'N/A'}</span>
                       </div>
                     </div>
                   </div>
-                </div>
-              </TabsContent>
-            </Tabs>
-          )}
-        </div>
-      </CardContent>
-      <CardFooter className="flex gap-2">
-        {isRunning && onStop && (
-          <Button 
-            onClick={handleStopVerification}
-            variant="outline"
-            className="flex-1"
-          >
-            <Square className="mr-2 h-4 w-4" />
-            Stop Verification
-          </Button>
+                </TabsContent>
+              </Tabs>
+            )}
+          </div>
         )}
-        <Button 
-          onClick={handleStartVerification} 
-          disabled={isRunning || apiAvailable === false}
-          className={isRunning && onStop ? "flex-1" : "w-full"}
-        >
-          {isRunning ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Verifying...
-            </>
-          ) : isPending ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Pending...
-            </>
-          ) : (
-            <>
-              <Play className="mr-2 h-4 w-4" />
-              Start Verification
-            </>
+
+        {currentTab === "logic-validation" && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-medium mb-2">Contract Logic Specifications</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Review and edit the AI-generated specifications for your smart contract. These specifications will be used for formal verification.
+              </p>
+              
+              <Textarea 
+                className="h-96 font-mono text-sm"
+                placeholder="Loading specifications..."
+                value={specificationsDraft}
+                onChange={(e) => setSpecificationsDraft(e.target.value)}
+                disabled={isConfirmingLogic}
+              />
+            </div>
+            
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (onSwitchTab) {
+                    onSwitchTab("verification");
+                    setCurrentTab("verification");
+                  }
+                }}
+                disabled={isConfirmingLogic}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmLogic}
+                disabled={isConfirmingLogic || !specificationsDraft}
+                className="flex-1"
+              >
+                {isConfirmingLogic ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Confirming...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Confirm Specifications
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+      {currentTab === "verification" && (
+        <CardFooter className="flex gap-2">
+          {isRunning && onStop && (
+            <Button 
+              onClick={handleStopVerification}
+              variant="outline"
+              className="flex-1"
+            >
+              <Square className="mr-2 h-4 w-4" />
+              Stop Verification
+            </Button>
           )}
-        </Button>
-      </CardFooter>
+          <Button 
+            onClick={handleStartVerification} 
+            disabled={isRunning || apiAvailable === false}
+            className={isRunning && onStop ? "flex-1" : "w-full"}
+          >
+            {isRunning ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Verifying...
+              </>
+            ) : isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Pending...
+              </>
+            ) : (
+              <>
+                <Play className="mr-2 h-4 w-4" />
+                Start Verification
+              </>
+            )}
+          </Button>
+        </CardFooter>
+      )}
     </Card>
   );
 }

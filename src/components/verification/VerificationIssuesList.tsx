@@ -30,32 +30,29 @@ export function VerificationIssuesList({
   const [searchQuery, setSearchQuery] = useState<string>("");
   
   const filteredIssues = issues.filter(issue => {
-    // Apply type filter
     if (filterType !== "all" && issue.type !== filterType) {
       return false;
     }
     
-    // Apply search filter (if any)
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
-        issue.message?.toLowerCase().includes(query) ||
-        issue.code?.toLowerCase().includes(query) ||
-        issue.function_name?.toLowerCase().includes(query) ||
-        issue.contract_name?.toLowerCase().includes(query) ||
-        issue.suggested_fix?.toLowerCase().includes(query)
+        issue.title?.toLowerCase().includes(query) ||
+        issue.description?.toLowerCase().includes(query) ||
+        (issue.code?.toLowerCase().includes(query)) ||
+        (issue.function_name?.toLowerCase().includes(query)) ||
+        (issue.contract_name?.toLowerCase().includes(query)) ||
+        (issue.suggested_fix?.toLowerCase().includes(query))
       );
     }
     
     return true;
   });
   
-  // Sort issues by severity (high to low)
+  // Update severity sorting to include critical
   const sortedIssues = [...filteredIssues].sort((a, b) => {
-    const severityOrder = { high: 3, medium: 2, low: 1 };
-    const aVal = severityOrder[a.severity as keyof typeof severityOrder] || 0;
-    const bVal = severityOrder[b.severity as keyof typeof severityOrder] || 0;
-    return bVal - aVal;
+    const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+    return severityOrder[b.severity] - severityOrder[a.severity];
   });
   
   if (issues.length === 0) {
@@ -103,6 +100,7 @@ export function VerificationIssuesList({
             <IssueCard 
               key={index} 
               issue={issue} 
+
               onNavigateToLine={onNavigateToLine}
             />
           ))}

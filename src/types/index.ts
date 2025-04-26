@@ -18,40 +18,50 @@ export interface Project {
 
 export enum VerificationLevel {
   SIMPLE = 'simple',
-  MEDIUM = 'medium',
-  ADVANCED = 'advanced'
+  DEEP = 'deep',
+  FORMAL = 'formal'
 }
 
 export enum VerificationStatus {
   PENDING = 'pending',
   RUNNING = 'running',
   COMPLETED = 'completed',
-  FAILED = 'failed'
+  FAILED = 'failed',
+  AWAITING_CONFIRMATION ='awaiting_confirmation'
 }
 
 export interface VerificationResult {
   id: string;
   project_id: string;
-  level: VerificationLevel;
-  status: VerificationStatus;
-  results: VerificationIssue[];
-  logs: string[];
+  level: string;
+  status: string;
+  results: any; // or a more specific type if you have one
+  logs?: string[];
   created_at: string;
   completed_at?: string;
-  structured_results?: StructuredVerificationIssue[];
-  logic_text?: string;
-  cvl_code?: string;
+
+
+  // Add the missing properties from your database schema
+  specs_draft?: string;
+  structured_results?: any;
+  phases?: any;
+  error_message?: string;
+  specs_used?: string;
+  options?: any;
+  priority_focus?: string;
 }
 
 export interface VerificationIssue {
+  id: string;
+  file: string;
+  line: number;
   type: 'error' | 'warning' | 'info';
-  message: string;
-  location?: {
-    line: number;
-    column: number;
-  };
+  title: string;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  confidence: 'High' | 'Medium' | 'Low';
+  description: string;
+  // Keep existing optional fields if still relevant
   code?: string;
-  severity: 'high' | 'medium' | 'low';
   function_name?: string;
   contract_name?: string;
   suggested_fix?: string;
