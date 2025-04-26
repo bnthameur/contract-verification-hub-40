@@ -631,12 +631,10 @@ rule preservesTotalSupply(method f) {
           mainContent={
             <div className="flex flex-col h-full">
               <div className="border-b px-6 py-3 flex items-center justify-between bg-card/50">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center text-sm">
-                    <span className="text-muted-foreground">Project:</span>
-                    <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground" />
-                    <span className="font-medium">{activeProject?.name}</span>
-                  </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-muted-foreground text-sm">Project:</span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium text-sm">{activeProject?.name}</span>
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -650,49 +648,51 @@ rule preservesTotalSupply(method f) {
                 </div>
               </div>
 
-              <Tabs defaultValue="code" className="flex-1 flex flex-col">
-                <TabsList>
-                  <TabsTrigger value="code">Code</TabsTrigger>
-                  <TabsTrigger value="tests">Tests</TabsTrigger>
-                  <TabsTrigger value="deployment" disabled>Deployment</TabsTrigger>
-                </TabsList>
+              <div className="flex flex-col h-full">
+                <Tabs defaultValue="code" className="flex-1 flex flex-col">
+                  <TabsList className="mx-4 mt-2">
+                    <TabsTrigger value="code">Code</TabsTrigger>
+                    <TabsTrigger value="tests">Tests</TabsTrigger>
+                    <TabsTrigger value="deployment" disabled>Deployment</TabsTrigger>
+                  </TabsList>
 
-                <TabsContent value="code" className="flex-1 p-0 overflow-hidden">
-                  <MonacoEditor 
-                    value={code} 
-                    onChange={setCode} 
-                    onEditorMount={handleEditorMount}
-                  />
-                </TabsContent>
-
-                <TabsContent value="tests" className="flex-1 p-0 overflow-hidden">
-                  {verificationResult?.cvl_code ? (
+                  <TabsContent value="code" className="flex-1 p-0 overflow-hidden">
                     <MonacoEditor 
-                      value={verificationResult.cvl_code}
-                      onChange={() => {}}
-                      options={{
-                        readOnly: true,
-                        language: 'plaintext',
-                      }}
+                      value={code} 
+                      onChange={setCode} 
+                      onEditorMount={handleEditorMount}
                     />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center p-6">
-                        <h3 className="text-lg font-medium mb-2">No CVL code available</h3>
-                        <p className="text-muted-foreground mb-4">
-                          Run an advanced verification to generate CVL code
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </TabsContent>
+                  </TabsContent>
 
-                <TabsContent value="deployment" className="flex-1 p-0 overflow-hidden">
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    Deployment features coming soon.
-                  </div>
-                </TabsContent>
-              </Tabs>
+                  <TabsContent value="tests" className="flex-1 p-0 overflow-hidden">
+                    {verificationResult?.cvl_code ? (
+                      <MonacoEditor 
+                        value={verificationResult.cvl_code}
+                        onChange={() => {}}
+                        options={{
+                          readOnly: true,
+                          language: 'plaintext',
+                        }}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center p-6">
+                          <h3 className="text-lg font-medium mb-2">No CVL code available</h3>
+                          <p className="text-muted-foreground mb-4">
+                            Run an advanced verification to generate CVL code
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="deployment" className="flex-1 p-0 overflow-hidden">
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      Deployment features coming soon.
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
             </div>
           }
           verificationContent={

@@ -9,13 +9,14 @@ import { useAuth } from "@/contexts/AuthContext";
 interface NavbarProps {
   hideUser?: boolean;
 }
-
-export function Navbar({ hideUser = false }: NavbarProps) {
-  const { user } = useAuth();
-
-  return (
-    <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-16 items-center">
+export function Navbar({
+  hideUser = false
+}: NavbarProps) {
+  const {
+    user
+  } = useAuth();
+  return <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="flex h-16 items-center px-[29px]">
         <div className="flex gap-6 md:gap-10">
           <Link to="/" className="flex items-center space-x-2">
             <img 
