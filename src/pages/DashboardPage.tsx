@@ -73,12 +73,12 @@ export default function DashboardPage() {
     }
   };
 
-  const fetchLatestVerificationResult = async (projectId: string) => {
+  const fetchLatestVerificationResult = async (project_id: string) => {
     try {
       const { data, error } = await supabase
         .from('verification_results')
         .select('*')
-        .eq('project_id', projectId)
+        .eq('project_id', project_id)
         .order('created_at', { ascending: false })
         .limit(1);
         
@@ -322,7 +322,7 @@ export default function DashboardPage() {
   const handleStartVerification = async (level: VerificationLevel) => {
     await handleSaveCode();
     
-    if (level === VerificationLevel.ADVANCED) {
+    if (level === VerificationLevel.DEEP) {
       setActiveVerificationTab("logic-validation");
       setIsLoadingAILogic(true);
       
@@ -336,11 +336,11 @@ export default function DashboardPage() {
           // Create initial verification record with the AI-generated logic
           const initialResult: Partial<VerificationResult> = {
             project_id: activeProject.id,
-            level: VerificationLevel.ADVANCED,
+            level: VerificationLevel.DEEP,
             status: VerificationStatus.PENDING,
             results: [],
             logs: ["Generated initial contract logic."],
-            logic_text: logicText,
+            specs_draft: logicText,
             created_at: new Date().toISOString(),
           };
           
@@ -665,9 +665,9 @@ rule preservesTotalSupply(method f) {
                   </TabsContent>
 
                   <TabsContent value="tests" className="flex-1 p-0 overflow-hidden">
-                    {verificationResult?.cvl_code ? (
+                    {verificationResult?.specs_used ? (
                       <MonacoEditor 
-                        value={verificationResult.cvl_code}
+                        value={verificationResult.specs_used}
                         onChange={() => {}}
                         options={{
                           readOnly: true,
@@ -707,19 +707,16 @@ rule preservesTotalSupply(method f) {
                 </TabsList>
 
                 <TabsContent value="verification" className="h-full">
-                  <VerificationPanel 
-                    projectId={activeProject?.id || ''} 
-                    code={code}
-                    onVerify={handleStartVerification}
-                    onStop={handleStopVerification}
-                    result={verificationResult}
-                    onNavigateToLine={handleNavigateToLine}
-                  />
+                <VerificationPanel 
+                    project={activeProject}
+                    onNavigateToLine={handleNavigateToLine} onStartVerification={function (level: string): Promise<void> {
+                      throw new Error("Function not implemented.");
+                    } } isRunningVerification={false} isLoadingAILogic={false} isPollingResults={false}                  />
                 </TabsContent>
 
                 <TabsContent value="logic-validation" className="h-full">
                   <LogicValidation
-                    projectId={activeProject?.id || ''}
+                    project_id={activeProject?.id || ''}
                     code={code}
                     result={verificationResult}
                     onConfirmLogic={handleConfirmLogic}

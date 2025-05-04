@@ -14,6 +14,9 @@ from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import logging
+import venv
+import sys
+
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, 
@@ -199,36 +202,176 @@ def process_results_with_ai(content: str, prompt: str, mode: str = "chat", timeo
         return {"error": f"DeepSeek API Error: {str(e)}"}
 
 
-def run_certoraprover(contract_file_path: str, cvl_code: str) -> Dict[str, Any]:
-    """Run Certora Prover on the smart contract with CVL specs"""
-    logger.info(f"Running Certora Prover on {contract_file_path}")
-    # Save CVL code to a file
-    with tempfile.NamedTemporaryFile(suffix=".spec", delete=False) as cvl_file:
-        cvl_file.write(cvl_code.encode())
-        cvl_path = cvl_file.name
+class CertoraRunner:
+    """A class to manage Certora Prover runs with a reusable virtual environment"""
+    
+    def __init__(self, certora_root: str = "."):
+        """Initialize the CertoraRunner
+        
+        Args:
+            certora_root: Path to the CertoraProver repository root
+        """
+        import os
+        import sys
+        import logging
+        import tempfile
+        import subprocess
+        import venv
+        
+        self.logger = logging.getLogger(__name__)
+        self.certora_root = os.path.abspath(certora_root)
+        self.venv_dir = None
+        self.python_path = None
+        self.initialized = False
+        
+        # Create a persistent directory for the virtual environment
+        venv_parent = os.path.join(tempfile.gettempdir(), "certora_venv")
+        os.makedirs(venv_parent, exist_ok=True)
+        self.venv_dir = os.path.join(venv_parent, ".venv")
+        
+        # Set paths based on platform
+        if sys.platform == "win32":
+            self.python_path = os.path.join(self.venv_dir, "Scripts", "python.exe")
+        else:
+            self.python_path = os.path.join(self.venv_dir, "bin", "python")
+    
+    def initialize(self):
+        """Initialize the virtual environment if not already done"""
+        import os
+        import sys
+        import venv
+        import subprocess
+        
+        if self.initialized:
+            return True
+            
+        try:
+            # Check if virtual environment exists
+            if not os.path.exists(self.venv_dir):
+                self.logger.info(f"Creating virtual environment at {self.venv_dir}")
+                venv.create(self.venv_dir, with_pip=True)
+                
+                # Get pip path based on platform
+                if sys.platform == "win32":
+                    pip_path = os.path.join(self.venv_dir, "Scripts", "pip.exe")
+                else:
+                    pip_path = os.path.join(self.venv_dir, "bin", "pip")
+                
+                # Install dependencies
+                requirements_path = os.path.join(self.certora_root, "scripts", "certora_cli_requirements.txt")
+                self.logger.info(f"Installing dependencies from {requirements_path}")
+                result = subprocess.run(
+                    [pip_path, "install", "-r", requirements_path],
+                    check=True,
+                    capture_output=True
+                )
+                
+                if result.returncode != 0:
+                    self.logger.error(f"Failed to install dependencies: {result.stderr}")
+                    return False
+            
+            self.initialized = True
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error initializing virtual environment: {str(e)}")
+            return False
+    
+    def run_prover(self, contract_file_path: str, cvl_code: str) -> dict:
+        """Run Certora Prover on the smart contract with CVL specs
+        
+        Args:
+            contract_file_path: Path to the smart contract file
+            cvl_code: CVL specifications as string
+        
+        Returns:
+            Dictionary containing the results or error information
+        """
+        import tempfile
+        import subprocess
+        import json
+        import os
+        
+        # Ensure virtual environment is initialized
+        if not self.initialized and not self.initialize():
+            return {"success": False, "error": "Failed to initialize virtual environment"}
+        
+        self.logger.info(f"Running Certora Prover on {contract_file_path}")
+        
+        cvl_path = None
+        try:
+            # Save CVL code to a temporary file
+            with tempfile.NamedTemporaryFile(suffix=".spec", delete=False) as cvl_file:
+                cvl_file.write(cvl_code.encode())
+                cvl_path = cvl_file.name
+            
+            # Run Certora Prover
+            self.logger.info("Executing Certora Prover...")
+            result = subprocess.run(
+                [
+                    self.python_path, 
+                    os.path.join(self.certora_root, "scripts", "certoraRun.py"), 
+                    contract_file_path, 
+                    "--spec", 
+                    cvl_path, 
+                    "--json"
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                cwd=self.certora_root  # Run from the repository root
+            )
+            
+            # Clean up the temporary file
+            if cvl_path and os.path.exists(cvl_path):
+                os.unlink(cvl_path)
+                cvl_path = None
+            
+            # Process the result
+            if result.returncode != 0:
+                self.logger.error(f"Certora Prover failed: {result.stderr}")
+                return {"success": False, "error": result.stderr}
+            
+            self.logger.info("Certora Prover completed successfully")
+            return json.loads(result.stdout) if result.stdout else {"success": True}
+            
+        except Exception as e:
+            # Clean up if exception occurs
+            if cvl_path and os.path.exists(cvl_path):
+                os.unlink(cvl_path)
+            self.logger.error(f"Error running Certora Prover: {str(e)}")
+            return {"success": False, "error": str(e)}
+
+# Simple function wrapper for backward compatibility
+def run_certoraprover(contract_file_path: str, cvl_code: str, certora_root: str = ".") -> dict:
+    """Run Certora Prover on the smart contract with CVL specs
+    
+    This is a wrapper around CertoraRunner that creates or reuses a virtual environment.
+    
+    Args:
+        contract_file_path: Path to the smart contract file
+        cvl_code: CVL specifications as string
+        certora_root: Path to the CertoraProver repository root (default: current directory)
+    
+    Returns:
+        Dictionary containing the results or error information
+    """
+    # Use a global runner to reuse the virtual environment
+    global _certora_runner
     
     try:
-        result = subprocess.run(
-            ["certoraRun", contract_file_path, "--spec", cvl_path, "--json"],
-            capture_output=True,
-            text=True,
-            check=False
-        )
+        # Create runner if it doesn't exist
+        if '_certora_runner' not in globals() or _certora_runner is None:
+            _certora_runner = CertoraRunner(certora_root)
+            
+        # Run the prover using the existing runner
+        return _certora_runner.run_prover(contract_file_path, cvl_code)
         
-        os.unlink(cvl_path)  # Clean up the CVL file
-        
-        if result.returncode != 0 and not result.stdout:
-            logger.error(f"Certora Prover failed: {result.stderr}")
-            return {"error": result.stderr}
-        
-        logger.info("Certora Prover completed successfully")
-        return json.loads(result.stdout)
     except Exception as e:
-        if os.path.exists(cvl_path):
-            os.unlink(cvl_path)  # Clean up if exception occurs
-        logger.error(f"Error running Certora Prover: {str(e)}")
-        return {"error": f"Error running Certora Prover: {str(e)}"}
-
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in run_certoraprover: {str(e)}")
+        return {"success": False, "error": str(e)}
 # Verification tasks
 async def run_simple_verification(project_id: str, verification_id: str):
     logger.info(f"Starting simple verification for project {project_id}")

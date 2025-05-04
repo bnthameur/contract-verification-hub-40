@@ -1,8 +1,7 @@
-
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { PlusCircle, FolderPlus, Search, MoreHorizontal, Edit, Trash } from "lucide-react";
+import { PlusCircle, FolderPlus, Search, MoreHorizontal, Edit, Trash, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { Project } from "@/types";
 import { 
@@ -40,6 +39,7 @@ export function Sidebar({
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
   const { toast } = useToast();
 
   const filteredProjects = projects.filter((project) =>
@@ -120,102 +120,154 @@ export function Sidebar({
   };
 
   return (
-    <div className="group flex flex-col h-full bg-background border-r">
+    <div className={cn(
+      "group flex flex-col h-full bg-background border-r transition-all duration-300",
+      collapsed ? "w-[60px]" : "w-[240px]"
+    )}>
       <div className="flex items-center justify-between p-4">
-        <h2 className="text-lg font-semibold">Projects</h2>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          aria-label="Create project"
-          onClick={onCreateProject}
-        >
-          <PlusCircle className="h-5 w-5 text-primary" />
-        </Button>
+        {!collapsed && (
+          <h2 className="text-lg font-semibold">Projects</h2>
+        )}
+        <div className="flex items-center">
+          {!collapsed && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              aria-label="Create project"
+              onClick={onCreateProject}
+            >
+              <PlusCircle className="h-5 w-5 text-primary" />
+            </Button>
+          )}
+          <Button
+            variant="ghost" 
+            size="icon" 
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={() => setCollapsed(!collapsed)}
+            className="mr-2-2 transition-all duration-300 group-hover:opacity-100"
+          >
+            {collapsed ?<ChevronRight className="h-4 w-5" />:<ChevronLeft className="h-5 w-5" />}
+          </Button>
+        </div>
       </div>
       
-      <div className="relative px-4 mb-4">
-        <Search className="absolute left-6 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search projects..."
-          className="pl-8"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-      
-      <Separator className="my-2" />
+      {!collapsed && (
+        <>
+          <div className="relative px-4 mb-4">
+            <Search className="absolute left-6 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search projects..."
+              className="pl-8"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          
+          <Separator className="my-2" />
+        </>
+      )}
       
       <ScrollArea className="flex-grow px-2 overflow-y-auto">
-        <div className="space-y-1 py-2">
-          {filteredProjects.length > 0 ? (
-            filteredProjects.map((project) => (
-              <div 
-                key={project.id} 
+        {collapsed ? (
+          <div className="flex flex-col items-center py-4 space-y-4">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              aria-label="Create project"
+              onClick={onCreateProject}
+            >
+              <PlusCircle className="h-5 w-5 text-primary" />
+            </Button>
+            {filteredProjects.length > 0 && filteredProjects.map((project) => (
+              <Button
+                key={project.id}
+                variant="ghost"
+                size="icon"
                 className={cn(
-                  "flex justify-between items-center rounded-md",
+                  "rounded-md",
                   project.id === activeProject?.id ? "bg-accent" : "hover:bg-muted"
                 )}
+                onClick={() => onSelectProject(project)}
+                title={project.name}
               >
-                <Button
-                  variant="ghost"
-                  className={cn(
-                    "w-full justify-start font-normal px-4 py-2 h-auto",
-                    project.id === activeProject?.id && "text-accent-foreground"
-                  )}
-                  onClick={() => onSelectProject(project)}
-                >
-                  <div className="flex flex-col items-start">
-                    <div className="text-sm font-medium">{project.name}</div>
-                    {project.description && (
-                      <div className="text-xs text-muted-foreground line-clamp-1">
-                        {project.description}
-                      </div>
-                    )}
-                  </div>
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleEditProject(project)}>
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      className="text-destructive focus:text-destructive" 
-                      onClick={() => handleDeleteProject(project)}
-                    >
-                      <Trash className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ))
-          ) : search ? (
-            <div className="px-4 py-3 text-sm text-muted-foreground">
-              No projects found
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
-              <FolderPlus className="h-10 w-10 text-muted-foreground mb-2" />
-              <h3 className="text-lg font-medium">No projects yet</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Create your first project to get started
-              </p>
-              <Button 
-                onClick={onCreateProject}
-                className="gap-1.5"
-              >
-                <PlusCircle className="h-4 w-4" />
-                New Project
+                <div className="h-5 w-5 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
+                  {project.name.charAt(0).toUpperCase()}
+                </div>
               </Button>
-            </div>
-          )}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-1 py-2">
+            {filteredProjects.length > 0 ? (
+              filteredProjects.map((project) => (
+                <div 
+                  key={project.id} 
+                  className={cn(
+                    "flex justify-between items-center rounded-md",
+                    project.id === activeProject?.id ? "bg-accent" : "hover:bg-muted"
+                  )}
+                >
+                  <Button
+                    variant="ghost"
+                    className={cn(
+                      "w-full justify-start font-normal px-4 py-2 h-auto",
+                      project.id === activeProject?.id && "text-accent-foreground"
+                    )}
+                    onClick={() => onSelectProject(project)}
+                  >
+                    <div className="flex flex-col items-start">
+                      <div className="text-sm font-medium">{project.name}</div>
+                      {project.description && (
+                        <div className="text-xs text-muted-foreground line-clamp-1">
+                          {project.description}
+                        </div>
+                      )}
+                    </div>
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleEditProject(project)}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        className="text-destructive focus:text-destructive" 
+                        onClick={() => handleDeleteProject(project)}
+                      >
+                        <Trash className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ))
+            ) : search ? (
+              <div className="px-4 py-3 text-sm text-muted-foreground">
+                No projects found
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
+                <FolderPlus className="h-10 w-10 text-muted-foreground mb-2" />
+                <h3 className="text-lg font-medium">No projects yet</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Create your first project to get started
+                </p>
+                <Button 
+                  onClick={onCreateProject}
+                  className="gap-1.5"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  New Project
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </ScrollArea>
 
       {/* Edit Project Dialog */}
