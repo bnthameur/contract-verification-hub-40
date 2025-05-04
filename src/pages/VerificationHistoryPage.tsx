@@ -1,17 +1,35 @@
-
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { History, ArrowLeft, Calendar, Clock, AlertTriangle, CheckCircle, XCircle, ChevronRight } from "lucide-react";
+import { 
+  History, 
+  ArrowLeft, 
+  Calendar, 
+  Clock, 
+  AlertTriangle, 
+  CheckCircle, 
+  XCircle, 
+  ChevronRight,
+  ChevronDown
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { format } from "date-fns";
-import { Project } from "@/types";
+import { Project, VerificationIssue } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { VerificationIssuesList } from "@/components/verification/VerificationIssuesList";
 
 type VerificationResult = {
   id: string;
@@ -20,6 +38,7 @@ type VerificationResult = {
   status: 'pending' | 'running' | 'completed' | 'failed';
   created_at: string;
   completed_at: string | null;
+  results: any[];
 }
 
 export default function VerificationHistoryPage() {
@@ -29,6 +48,9 @@ export default function VerificationHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [selectedResult, setSelectedResult] = useState<VerificationResult | null>(null);
+  const [issues, setIssues] = useState<VerificationIssue[]>([]);
 
   const handleGoBack = () => {
     navigate(-1);
@@ -125,13 +147,38 @@ export default function VerificationHistoryPage() {
     }
   };
 
-  const viewDetails = (result: VerificationResult) => {
-    // In a future implementation, this could navigate to a detailed view
-    navigate(`/dashboard?project=${result.project_id}&result=${result.id}`);
+  const viewDetails = async (result: VerificationResult) => {
+    setSelectedResult(result);
+    
+    try {
+      let formattedIssues: VerificationIssue[] = [];
+      
+      if (result.results && Array.isArray(result.results)) {
+        formattedIssues = result.results.map((issue: any, index: number) => ({
+          id: `${result.id}-issue-${index}`,
+          file: issue.file || 'Unknown file',
+          line: issue.line_number || issue.line || 0,
+          type: issue.type || (issue.severity === 'high' ? 'error' : issue.severity === 'medium' ? 'warning' : 'info'),
+          title: issue.error_type || issue.title || 'Issue',
+          severity: issue.severity || 'medium',
+          confidence: issue.confidence || 'Medium',
+          description: issue.description || '',
+          code: issue.code_snippet || issue.code || '',
+          function_name: issue.function_name || '',
+          contract_name: issue.contract_name || '',
+          suggested_fix: issue.suggested_fix || ''
+        }));
+      }
+      
+      setIssues(formattedIssues);
+      setDetailDialogOpen(true);
+    } catch (error) {
+      console.error("Error formatting issues:", error);
+    }
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       <Navbar />
       <div className="flex-1 container py-6 space-y-6">
         <div className="flex items-center justify-between">
@@ -148,12 +195,30 @@ export default function VerificationHistoryPage() {
         </div>
 
         <Card className="mb-6">
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center">
-                <History className="h-5 w-5 mr-2 text-primary" />
-                Project Verification History
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <div className="flex items-center cursor-pointer group hover:opacity-80 transition-all">
+                    <h2 className="text-3xl font-bold text-primary pr-2 hover:text-primary/90 transition-colors">
+                      {currentProject?.name || "Select a project"}
+                    </h2>
+                    <ChevronDown className="h-5 w-5 text-primary/70 group-hover:text-primary transition-colors" />
+                  </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56">
+                  {projects.map((project) => (
+                    <DropdownMenuItem 
+                      key={project.id} 
+                      className="cursor-pointer"
+                      onClick={() => handleProjectChange(project.id)}
+                    >
+                      {project.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               {projects.length > 0 && (
                 <Select
                   value={currentProject?.id}
@@ -172,7 +237,7 @@ export default function VerificationHistoryPage() {
                 </Select>
               )}
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="pt-2">
               {currentProject ? (
                 `Viewing verification history for ${currentProject.name}`
               ) : (
@@ -253,6 +318,47 @@ export default function VerificationHistoryPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Result Details Dialog */}
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center space-x-2">
+              <span>Verification Results</span>
+              <span className="ml-2">{selectedResult?.level && getLevelBadge(selectedResult.level)}</span>
+              <span>{selectedResult?.status && getStatusBadge(selectedResult.status)}</span>
+            </DialogTitle>
+            <DialogDescription>
+              {selectedResult && (
+                <div className="flex items-center space-x-2 text-sm">
+                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>{format(new Date(selectedResult.created_at), "MMMM dd, yyyy 'at' HH:mm:ss")}</span>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="flex-1 mt-4">
+            <div className="pr-4">
+              {issues.length > 0 ? (
+                <VerificationIssuesList 
+                  issues={issues}
+                  maxHeight="60vh"
+                  projectName={currentProject?.name}
+                />
+              ) : (
+                <div className="text-center py-12">
+                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium">No issues found</h3>
+                  <p className="text-muted-foreground mt-1">
+                    This verification did not detect any issues.
+                  </p>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
