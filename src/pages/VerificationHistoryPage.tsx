@@ -218,24 +218,6 @@ export default function VerificationHistoryPage() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-
-              {projects.length > 0 && (
-                <Select
-                  value={currentProject?.id}
-                  onValueChange={handleProjectChange}
-                >
-                  <SelectTrigger className="w-[220px]">
-                    <SelectValue placeholder="Select a project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
             </CardTitle>
             <CardDescription className="pt-2">
               {currentProject ? (
