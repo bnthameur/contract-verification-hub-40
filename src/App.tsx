@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,6 +10,7 @@ import Index from "./pages/Index";
 import AuthPage from "./pages/AuthPage";
 import DashboardPage from "./pages/DashboardPage";
 import NotFound from "./pages/NotFound";
+import VerificationHistoryPage from "./pages/VerificationHistoryPage";
 import { useAuth } from "@/contexts/AuthContext";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -31,6 +33,14 @@ const App = () => {
                   element={
                     <ProtectedRoute>
                       <DashboardPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/verification-history/:projectId"
+                  element={
+                    <ProtectedRoute>
+                      <VerificationHistoryPage />
                     </ProtectedRoute>
                   }
                 />
