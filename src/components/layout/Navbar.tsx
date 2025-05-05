@@ -22,13 +22,13 @@ export function Navbar({
         <div className="flex gap-6 md:gap-10">
           <Link to="/" className="flex items-center space-x-2">
             <img 
-                src="/logoWhite.png" 
-                className="w-16 dark:block hidden" 
+                src="/logoBlack.png" 
+                className="w-20 dark:block hidden" 
                 alt="Logo Light"
             />
             <img 
-                src="/logoBlack.png" 
-                className="w-16 block dark:hidden" 
+                src="/logoWhite.png" 
+                className="w-20 block dark:hidden" 
                 alt="Logo Dark"
             />          
           </Link>

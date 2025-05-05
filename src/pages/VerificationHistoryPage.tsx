@@ -34,7 +34,7 @@ import { VerificationIssuesList } from "@/components/verification/VerificationIs
 type VerificationResult = {
   id: string;
   project_id: string;
-  level: 'simple' | 'medium' | 'advanced';
+  level: 'simple' | 'deep' | 'advanced' | 'formal';
   status: 'pending' | 'running' | 'completed' | 'failed';
   created_at: string;
   completed_at: string | null;
@@ -138,8 +138,8 @@ export default function VerificationHistoryPage() {
     switch (level) {
       case 'simple':
         return <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">Simple</Badge>;
-      case 'medium':
-        return <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20">Medium</Badge>;
+      case 'deep':
+        return <Badge variant="outline" className="bg-gray-400/10 text-gray-600 border-gray-900">Deep</Badge>;
       case 'advanced':
         return <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/20">Advanced</Badge>;
       default:

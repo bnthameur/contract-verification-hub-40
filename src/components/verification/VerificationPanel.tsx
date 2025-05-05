@@ -116,13 +116,13 @@ export function VerificationPanel({
   }, []);
 
   useEffect(() => {
-    if (result?.specs_draft && isAwaitingConfirmation) {
+    if (result?.spec_draft && isAwaitingConfirmation) {
       try {
-        const parsedSpecs = typeof result.specs_draft === 'string' 
-          ? JSON.parse(result.specs_draft) 
-          : result.specs_draft;
+        const parsedspec = typeof result.spec_draft === 'string' 
+          ? JSON.parse(result.spec_draft) 
+          : result.spec_draft;
         
-        const specContent = parsedSpecs.content || parsedSpecs;
+        const specContent = parsedspec.content || parsedspec;
         setSpecificationsDraft(typeof specContent === 'string' ? specContent : JSON.stringify(specContent, null, 2));
         
         if (onSwitchTab) {
@@ -131,7 +131,7 @@ export function VerificationPanel({
         }
       } catch (error) {
         console.error("Error parsing specifications:", error);
-        setSpecificationsDraft(JSON.stringify(result.specs_draft, null, 2));
+        setSpecificationsDraft(JSON.stringify(result.spec_draft, null, 2));
       }
     }
   }, [result, onSwitchTab]);
@@ -145,97 +145,66 @@ export function VerificationPanel({
       });
       return;
     }
-
-    if (level === VerificationLevel.DEEP && onSwitchTab) {
-      setIsVerifying(true);
+  
+    setIsVerifying(true);
+    setApiError(null);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token;
       
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const authToken = session?.access_token;
-        
-        const response = await fetch(`${API_URL}/verify/deep`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': authToken ? `Bearer ${authToken}` : ''
-          },
-          mode: 'cors',
-          credentials: 'omit',
-          body: JSON.stringify({ project_id: projectId }),
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`API Error (${response.status}): ${errorText}`);
-        }
-        
-        const data = await response.json();
-        
-        toast({
-          title: "Processing started",
-          description: "Generating specifications for your contract...",
-        });
-        
-        onVerify(level);
-        
-      } catch (error: any) {
-        console.error("Deep verification error:", error);
-        setApiError(error.message || "Failed to start deep verification.");
-        
-        toast({
-          title: "Verification failed",
-          description: error.message || "An unexpected error occurred",
-          variant: "destructive",
-        });
-      } finally {
-        setIsVerifying(false);
+      // Use the appropriate endpoint based on the selected verification level
+      const endpoint = level === VerificationLevel.DEEP 
+        ? `${API_URL}/verify/deep` 
+        : `${API_URL}/verify/simple`;
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': authToken ? `Bearer ${authToken}` : ''
+        },
+        mode: 'cors',
+        credentials: 'omit',
+        body: JSON.stringify({ project_id: projectId }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API Error (${response.status}): ${errorText}`);
       }
-    } else {
-      try {
-        setIsVerifying(true);
-        setApiError(null);
-        
-        const { data: { session } } = await supabase.auth.getSession();
-        const authToken = session?.access_token;
-        
-        const response = await fetch(`${API_URL}/verify/simple`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': authToken ? `Bearer ${authToken}` : ''
-          },
-          mode: 'cors',
-          credentials: 'omit',
-          body: JSON.stringify({ project_id: projectId }),
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`API Error (${response.status}): ${errorText}`);
-        }
-        
-        const data = await response.json();
-        
-        onVerify(level);
-        
-        toast({
-          title: "Verification started",
-          description: "Analysis is running in the background.",
-        });
-      } catch (error: any) {
-        console.error("Verification error:", error);
-        setApiError(error.message || "Failed to connect to verification API.");
-        
-        toast({
-          title: "Verification failed",
-          description: error.message || "An unexpected error occurred",
-          variant: "destructive",
-        });
-      } finally {
-        setIsVerifying(false);
+      
+      const data = await response.json();
+      
+      onVerify(level);
+      
+      const verificationTypeLabel = level === VerificationLevel.DEEP 
+        ? "Deep verification" 
+        : "Verification";
+      
+      toast({
+        title: `${verificationTypeLabel} started`,
+        description: level === VerificationLevel.DEEP 
+          ? "Generating specifications for your contract..." 
+          : "Analysis is running in the background.",
+      });
+      
+      if (level === VerificationLevel.DEEP && onSwitchTab) {
+        // Only switch to logic validation if we're doing a deep verification
+        // This will happen automatically when the result comes back with AWAITING_CONFIRMATION status
       }
+    } catch (error: any) {
+      console.error(`${level} verification error:`, error);
+      setApiError(error.message || `Failed to start ${level} verification.`);
+      
+      toast({
+        title: "Verification failed",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -269,7 +238,7 @@ export function VerificationPanel({
         },
         mode: 'cors',
         credentials: 'omit',
-        body: JSON.stringify({ specifications: specificationsDraft }),
+        body: JSON.stringify({ spec_draft: specificationsDraft }), // Changed from specifications to spec_draft
       });
       
       if (!response.ok) {

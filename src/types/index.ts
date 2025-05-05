@@ -40,8 +40,10 @@ export interface VerificationResult {
   results: VerificationIssue[];
   logs: string[];
   cvl_code?: string;
-  logic_text?: string;
-  specs_draft?: string | any;
+  spec_draft?: string | any;
+  spec_used?: string;
+  phase?: string;
+  error_message?: string;
 }
 
 export interface VerificationIssue {

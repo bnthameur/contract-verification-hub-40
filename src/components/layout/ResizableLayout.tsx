@@ -24,16 +24,10 @@ export function ResizableLayout({
       direction="horizontal"
       className="h-[calc(100vh-4rem)]"
     >
-      <ResizablePanel 
-        defaultSize={defaultSidebarSize} 
-        minSize={10} 
-        maxSize={25}
-        className="border-r"
-      >
-        {sidebarContent}
-      </ResizablePanel>
       
-      <ResizableHandle withHandle />
+        {sidebarContent}
+    
+      
       
       <ResizablePanel defaultSize={defaultMainSize} minSize={30}>
         {mainContent}

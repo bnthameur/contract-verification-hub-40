@@ -340,7 +340,7 @@ export default function DashboardPage() {
             status: VerificationStatus.PENDING,
             results: [],
             logs: ["Generated initial contract logic."],
-            logic_text: logicText,
+            spec_draft: logicText,
             created_at: new Date().toISOString(),
           };
           
@@ -383,7 +383,7 @@ export default function DashboardPage() {
       const { error } = await supabase
         .from('verification_results')
         .update({
-          logic_text: logicText,
+          spec_draft: logicText,
           status: VerificationStatus.RUNNING,
           logs: [...(verificationResult.logs || []), "Logic confirmed by user. Starting verification..."]
         })
@@ -475,6 +475,7 @@ rule preservesTotalSupply(method f) {
           .update({
             status: VerificationStatus.COMPLETED,
             cvl_code: mockCvlCode,
+            spec_used: verificationResult.spec_draft, // Use the spec_draft as the final spec used
             completed_at: new Date().toISOString(),
             logs: [...(verificationResult.logs || []), 
               "Generated CVL code from logic", 
@@ -632,7 +633,7 @@ rule preservesTotalSupply(method f) {
             <div className="flex flex-col h-full">
               <div className="border-b px-6 py-3 flex items-center justify-between bg-card/50">
                 <div className="flex items-center gap-1">
-                  <span className="text-muted-foreground text-sm">Project:</span>
+                  <span className="text-muted-foreground text-sm">Project</span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium text-sm">{activeProject?.name}</span>
                 </div>
