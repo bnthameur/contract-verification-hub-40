@@ -97,7 +97,7 @@ def create_verification_record(project_id: str, level: str) -> str:
         raise HTTPException(status_code=500, detail=f"Error creating verification record: {str(e)}")
 
 
-def update_verification_status(verification_id: str, status: str, results: Dict[str, Any], specs_draft: str = None, specs_used: str = None):
+def update_verification_status(verification_id: str, status: str, results: Dict[str, Any], spec_draft: str = None, spec_used: str = None):
     """Update the verification record with results"""
     logger.info(f"Updating verification record {verification_id} with status {status}")
     
@@ -129,11 +129,11 @@ def update_verification_status(verification_id: str, status: str, results: Dict[
         "completed_at": datetime.now().isoformat() if status in ["completed", "failed"] else None
     }
     
-    if specs_draft:
-        update_data["specs_draft"] = specs_draft
+    if spec_draft:
+        update_data["spec_draft"] = spec_draft
 
-    if specs_used:
-        update_data["specs_used"] = specs_used
+    if spec_used:
+        update_data["spec_used"] = spec_used
     
     try:
         supabase_client.table("verification_results").update(update_data).eq("id", verification_id).execute()
@@ -164,42 +164,25 @@ def run_slither_analysis(contract_file_path: str) -> Dict[str, Any]:
         return {"error": f"Error running Slither: {str(e)}"}
 
 # In process_results_with_ai function, add a timeout parameter
+from openai import OpenAI
 def process_results_with_ai(content: str, prompt: str, mode: str = "chat", timeout=30):
-    """Process content with DeepSeek's specific models"""
-    logger.info(f"Processing results with AI using mode: {mode}")
+    client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+    model = "deepseek-chat" if mode == "chat" else "deepseek-reasoner"
     try:
-        # Choose the appropriate endpoint
-        url = DEEPSEEK_CHAT_URL if mode == "chat" else DEEPSEEK_REASONER_URL
-        
-        # Structure the request according to DeepSeek's API
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "messages": [
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": content}
             ],
-            "model": "deepseek-chat" if mode == "chat" else "deepseek-reasoner",
-            "temperature": 0.7,
-            "max_tokens": 2000
-        }
-        
-        logger.info(f"Sending request to DeepSeek API: {url}")
-        # Increase timeout here
-        response = httpx.post(url, headers=headers, json=payload, timeout=timeout)
-        response.raise_for_status()
-        
-        # Extract the AI response content
-        ai_response = response.json()["choices"][0]["message"]["content"]
-        logger.info("Successfully received AI response")
-        return ai_response
-        
+            temperature=0.7,
+            max_tokens=2000
+        )
+        return response.choices[0].message.content
     except Exception as e:
         logger.error(f"DeepSeek API Error: {str(e)}")
         return {"error": f"DeepSeek API Error: {str(e)}"}
+<<<<<<< HEAD
 
 
 class CertoraRunner:
@@ -372,6 +355,65 @@ def run_certoraprover(contract_file_path: str, cvl_code: str, certora_root: str 
         logger = logging.getLogger(__name__)
         logger.error(f"Error in run_certoraprover: {str(e)}")
         return {"success": False, "error": str(e)}
+=======
+    
+def run_certoraprover(contract_file_path: str, cvl_code: str) -> Dict[str, Any]:
+    """Run Certora Prover on the smart contract with CVL spec"""
+    logger.info(f"Running Certora Prover on {contract_file_path}")
+    
+    # Create a temporary directory for all files
+    temp_dir = tempfile.mkdtemp()
+    
+    # Save CVL code to a spec file
+    spec_path = os.path.join(temp_dir, "verification.spec")
+    with open(spec_path, "w") as spec_file:
+        spec_file.write(cvl_code)
+    
+    # Create a config file
+    config_path = os.path.join(temp_dir, "certora_config.conf")
+    with open(config_path, "w") as config_file:
+        config_file.write(f"contract: {contract_file_path}\nspec: {spec_path}")
+    
+    logger.info(f"Created Certora config at {config_path}")
+    
+    try:
+        # First, activate virtual environment if needed
+        # This assumes your virtual env is already activated in the running process
+        
+        # Run the Certora Prover using the python script
+        logger.info(f"Executing: python CertoraProver/scripts/certoraRun.py {config_path}")
+        result = subprocess.run(
+            ["python", "CertoraProver/scripts/certoraRun.py", config_path, "--json"],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        
+        # Log outputs for debugging
+        logger.info(f"Certora stdout: {result.stdout[:200]}...")
+        logger.error(f"Certora stderr: {result.stderr[:200]}...")
+        
+        if result.returncode != 0:
+            logger.error(f"Certora Prover failed with return code {result.returncode}")
+            return {"error": f"Certora Prover failed: {result.stderr}"}
+        
+        try:
+            # Try to parse JSON output
+            json_result = json.loads(result.stdout)
+            logger.info("Certora Prover completed successfully")
+            return json_result
+        except json.JSONDecodeError:
+            logger.error("Failed to parse Certora output as JSON")
+            return {"error": "Failed to parse Certora output as JSON", "raw_output": result.stdout}
+            
+    except Exception as e:
+        logger.error(f"Error running Certora Prover: {str(e)}")
+        return {"error": f"Error running Certora Prover: {str(e)}"}
+    finally:
+        # Clean up temporary files
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
+>>>>>>> 263820cf15f81e461251b718b2d58692e1c7f758
 # Verification tasks
 async def run_simple_verification(project_id: str, verification_id: str):
     logger.info(f"Starting simple verification for project {project_id}")
@@ -602,31 +644,31 @@ async def run_deep_verification(project_id: str, verification_id: str):
         Your output should deeply and precisely define how the contract should behave and what properties must always hold. Do not include unrelated information."""
         
         logger.info("Generating specifications with AI")
-        specs_draft = process_results_with_ai(contract_code, ai_prompt, "reasoner")
+        spec_draft = process_results_with_ai(contract_code, ai_prompt, "reasoner")
         
         # Check if AI returned an error
-        if isinstance(specs_draft, dict) and "error" in specs_draft:
-            logger.error(f"Error generating specifications: {specs_draft['error']}")
+        if isinstance(spec_draft, dict) and "error" in spec_draft:
+            logger.error(f"Error generating specifications: {spec_draft['error']}")
             error_data = {
                 "results": [],
-                "logs": ["Deep verification initiated", "Error generating specifications", f"Error: {specs_draft['error']}"],
-                "error": specs_draft['error']
+                "logs": ["Deep verification initiated", "Error generating specifications", f"Error: {spec_draft['error']}"],
+                "error": spec_draft['error']
             }
             update_verification_status(verification_id, "failed", error_data)
             return
             
         # Update record with draft specifications
-        specs_update = {
+        spec_update = {
             "results": [],
             "logs": ["Deep verification initiated", "Generating formal specifications", "Specifications generated", "Awaiting user confirmation"]
         }
         
         logger.info("Updating verification record with draft specifications")
-        # Convert specs_draft to string if it's not already
-        if not isinstance(specs_draft, str):
-            specs_draft = json.dumps(specs_draft)
+        # Convert spec_draft to string if it's not already
+        if not isinstance(spec_draft, str):
+            spec_draft = json.dumps(spec_draft)
             
-        update_verification_status(verification_id, "awaiting_confirmation", specs_update, specs_draft)
+        update_verification_status(verification_id, "awaiting_confirmation", spec_update, spec_draft)
         
         # Clean up
         os.unlink(contract_path)
@@ -642,7 +684,7 @@ async def run_deep_verification(project_id: str, verification_id: str):
         }
         update_verification_status(verification_id, "failed", error_data)
 
-async def finalize_deep_verification(project_id: str, verification_id: str, approved_specs: str):
+async def finalize_deep_verification(project_id: str, verification_id: str, approved_spec: str):
     """Background task to complete deep verification after user confirmation"""
     logger.info(f"Finalizing deep verification for project {project_id}")
     try:
@@ -666,14 +708,14 @@ async def finalize_deep_verification(project_id: str, verification_id: str, appr
         ai_prompt = """You are an expert in writing formal specifications in Certora Verification Language (CVL). I will send you a confirmed list of functional and security specifications written in English. Your task is to translate them into correct and complete CVL code.
 
         Rules:
-        Make sure to cover all logic from the English specs.
+        Make sure to cover all logic from the English spec.
         Use invariant, rule, or function_spec as appropriate.
         Clearly name your invariants and rules.
         Follow Certora CVL best practices.
         """
         
         logger.info("Generating CVL code from approved specifications")
-        cvl_response = process_results_with_ai(approved_specs, ai_prompt, "reasoner")
+        cvl_response = process_results_with_ai(approved_spec, ai_prompt, "reasoner")
         
         # Check if AI returned an error
         if isinstance(cvl_response, dict) and "error" in cvl_response:
@@ -753,7 +795,7 @@ async def finalize_deep_verification(project_id: str, verification_id: str, appr
         
         # Update verification record with final results
         logger.info("Updating verification record with final results")
-        update_verification_status(verification_id, "completed", final_results, None, approved_specs)
+        update_verification_status(verification_id, "completed", final_results, None, approved_spec)
         
         # Clean up
         os.unlink(contract_path)
@@ -832,10 +874,10 @@ async def confirm_specifications(verification_id: str, specifications: Dict[str,
         }).eq("id", verification_id).execute()
         
         # Convert specifications to string if they're not already
-        specs_str = specifications if isinstance(specifications, str) else json.dumps(specifications)
+        spec_str = specifications if isinstance(specifications, str) else json.dumps(specifications)
         
         # Start background task for finalization
-        background_tasks.add_task(finalize_deep_verification, verification["project_id"], verification_id, specs_str)
+        background_tasks.add_task(finalize_deep_verification, verification["project_id"], verification_id, spec_str)
         
         logger.info(f"Deep verification confirmation processing for ID {verification_id}")
         return VerificationResponse(

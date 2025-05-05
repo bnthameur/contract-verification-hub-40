@@ -67,40 +67,55 @@ export interface Database {
           id: string
           project_id: string
           level: 'simple' | 'medium' | 'advanced'
-          status: 'pending' | 'running' | 'completed' | 'failed'
+          status: 'pending' | 'running' | 'completed' | 'failed' | 'awaiting_confirmation'
           results: Json[]
           logs: string[]
           created_at: string
           completed_at: string | null
           structured_results: Json | null
-          logic_text: string | null
+          spec_draft: string | null
           cvl_code: string | null
+          spec_used: string | null
+          phase: string | null
+          error_message: string | null
+          options: Json | null
+          priority_focus: string[] | null
         }
         Insert: {
           id?: string
           project_id: string
           level: 'simple' | 'medium' | 'advanced'
-          status: 'pending' | 'running' | 'completed' | 'failed'
+          status: 'pending' | 'running' | 'completed' | 'failed' | 'awaiting_confirmation'
           results?: Json[]
           logs?: string[]
           created_at?: string
           completed_at?: string | null
           structured_results?: Json | null
-          logic_text?: string | null
+          spec_draft?: string | null
           cvl_code?: string | null
+          spec_used?: string | null
+          phase?: string | null
+          error_message?: string | null
+          options?: Json | null
+          priority_focus?: string[] | null
         }
         Update: {
           id?: string
           project_id?: string
           level?: 'simple' | 'medium' | 'advanced'
-          status?: 'pending' | 'running' | 'completed' | 'failed'
+          status?: 'pending' | 'running' | 'completed' | 'failed' | 'awaiting_confirmation'
           results?: Json[]
           logs?: string[]
           created_at?: string
           completed_at?: string | null
           structured_results?: Json | null
-          logic_text?: string | null
+          spec_draft?: string | null
           cvl_code?: string | null
+          spec_used?: string | null
+          phase?: string | null
+          error_message?: string | null
+          options?: Json | null 
+          priority_focus?: string[] | null
         }
       }
       verification_issues: {

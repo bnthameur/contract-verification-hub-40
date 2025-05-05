@@ -26,8 +26,8 @@ export function LogicValidation({
   
   // Initialize the logic text when result changes
   useEffect(() => {
-    if (result && result.specs_draft) {
-      setLogicText(result.specs_draft);
+    if (result && result.spec_draft) {
+      setLogicText(result.spec_draft);
     }
   }, [result]);
   

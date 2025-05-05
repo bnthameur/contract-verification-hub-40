@@ -11,6 +11,7 @@ import AuthPage from "./pages/AuthPage";
 import DashboardPage from "./pages/DashboardPage";
 import HistoryPage from "./pages/HistoryPage";
 import NotFound from "./pages/NotFound";
+import VerificationHistoryPage from "./pages/VerificationHistoryPage";
 import { useAuth } from "@/contexts/AuthContext";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -37,10 +38,17 @@ const App = () => {
                   }
                 />
                 <Route
+<<<<<<< HEAD
                   path="/history/:projectId"
                   element={
                     <ProtectedRoute>
                       <HistoryPage />
+=======
+                  path="/verification-history/:projectId"
+                  element={
+                    <ProtectedRoute>
+                      <VerificationHistoryPage />
+>>>>>>> 263820cf15f81e461251b718b2d58692e1c7f758
                     </ProtectedRoute>
                   }
                 />

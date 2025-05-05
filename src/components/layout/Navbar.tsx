@@ -1,7 +1,7 @@
+
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { UserNav } from "@/components/layout/UserNav";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -22,13 +22,13 @@ export function Navbar({
         <div className="flex gap-6 md:gap-10">
           <Link to="/" className="flex items-center space-x-2">
             <img 
-                src="logoWhite.png" 
-                className="w-1/5 dark:hidden" 
+                src="/logoBlack.png" 
+                className="w-20 dark:block hidden" 
                 alt="Logo Light"
             />
             <img 
-                src="logoBlack.png" 
-                className="w-1/5 hidden dark:block" 
+                src="/logoWhite.png" 
+                className="w-20 block dark:hidden" 
                 alt="Logo Dark"
             />          
           </Link>

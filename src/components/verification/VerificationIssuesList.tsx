@@ -1,11 +1,19 @@
 import { VerificationIssue } from "@/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
+<<<<<<< HEAD
 import { ShieldCheck, Eye, History } from "lucide-react";
 import { VerificationIssue as IssueCard } from "./VerificationIssue";
 import { useState } from "react";
 import { IssuesDialog } from "./IssueDialog";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+=======
+import { ShieldCheck, Eye } from "lucide-react";
+import { IssueCard } from "./VerificationIssue";
+import { useState } from "react";
+import { IssuesDialog } from "./IssuesDialog";
+import { Button } from "@/components/ui/button";
+>>>>>>> 263820cf15f81e461251b718b2d58692e1c7f758
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface VerificationIssuesListProps {
@@ -26,7 +34,10 @@ export function VerificationIssuesList({
   const [filterType, setFilterType] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedIssueId, setSelectedIssueId] = useState<string>();
+<<<<<<< HEAD
   const navigate = useNavigate();
+=======
+>>>>>>> 263820cf15f81e461251b718b2d58692e1c7f758
   
   const filteredIssues = issues.filter(issue => {
     if (filterType !== "all" && issue.type !== filterType) {
@@ -72,6 +83,7 @@ export function VerificationIssuesList({
               <SelectItem value="info">Info</SelectItem>
             </SelectContent>
           </Select>
+<<<<<<< HEAD
 
           <Button 
             variant="outline" 
@@ -82,6 +94,8 @@ export function VerificationIssuesList({
             <History className="h-4 w-4" />
             View History
           </Button>
+=======
+>>>>>>> 263820cf15f81e461251b718b2d58692e1c7f758
         </div>
         
         <div className="text-sm text-muted-foreground">
