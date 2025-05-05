@@ -182,7 +182,6 @@ def process_results_with_ai(content: str, prompt: str, mode: str = "chat", timeo
     except Exception as e:
         logger.error(f"DeepSeek API Error: {str(e)}")
         return {"error": f"DeepSeek API Error: {str(e)}"}
-<<<<<<< HEAD
 
 
 class CertoraRunner:
@@ -355,65 +354,6 @@ def run_certoraprover(contract_file_path: str, cvl_code: str, certora_root: str 
         logger = logging.getLogger(__name__)
         logger.error(f"Error in run_certoraprover: {str(e)}")
         return {"success": False, "error": str(e)}
-=======
-    
-def run_certoraprover(contract_file_path: str, cvl_code: str) -> Dict[str, Any]:
-    """Run Certora Prover on the smart contract with CVL spec"""
-    logger.info(f"Running Certora Prover on {contract_file_path}")
-    
-    # Create a temporary directory for all files
-    temp_dir = tempfile.mkdtemp()
-    
-    # Save CVL code to a spec file
-    spec_path = os.path.join(temp_dir, "verification.spec")
-    with open(spec_path, "w") as spec_file:
-        spec_file.write(cvl_code)
-    
-    # Create a config file
-    config_path = os.path.join(temp_dir, "certora_config.conf")
-    with open(config_path, "w") as config_file:
-        config_file.write(f"contract: {contract_file_path}\nspec: {spec_path}")
-    
-    logger.info(f"Created Certora config at {config_path}")
-    
-    try:
-        # First, activate virtual environment if needed
-        # This assumes your virtual env is already activated in the running process
-        
-        # Run the Certora Prover using the python script
-        logger.info(f"Executing: python CertoraProver/scripts/certoraRun.py {config_path}")
-        result = subprocess.run(
-            ["python", "CertoraProver/scripts/certoraRun.py", config_path, "--json"],
-            capture_output=True,
-            text=True,
-            check=False
-        )
-        
-        # Log outputs for debugging
-        logger.info(f"Certora stdout: {result.stdout[:200]}...")
-        logger.error(f"Certora stderr: {result.stderr[:200]}...")
-        
-        if result.returncode != 0:
-            logger.error(f"Certora Prover failed with return code {result.returncode}")
-            return {"error": f"Certora Prover failed: {result.stderr}"}
-        
-        try:
-            # Try to parse JSON output
-            json_result = json.loads(result.stdout)
-            logger.info("Certora Prover completed successfully")
-            return json_result
-        except json.JSONDecodeError:
-            logger.error("Failed to parse Certora output as JSON")
-            return {"error": "Failed to parse Certora output as JSON", "raw_output": result.stdout}
-            
-    except Exception as e:
-        logger.error(f"Error running Certora Prover: {str(e)}")
-        return {"error": f"Error running Certora Prover: {str(e)}"}
-    finally:
-        # Clean up temporary files
-        import shutil
-        shutil.rmtree(temp_dir, ignore_errors=True)
->>>>>>> 263820cf15f81e461251b718b2d58692e1c7f758
 # Verification tasks
 async def run_simple_verification(project_id: str, verification_id: str):
     logger.info(f"Starting simple verification for project {project_id}")
