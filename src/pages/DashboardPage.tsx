@@ -366,75 +366,40 @@ export default function DashboardPage() {
     event.target.value = '';
   };
 
-  const handleStartVerification = async (level: string) => {
-    await handleSaveCode();
-    
-    if (!activeProject) return;
-    
-    setIsRunningVerification(true);
-    
-    if (level === VerificationLevel.DEEP) {
-      setActiveVerificationTab("verification"); // First show the verification panel with loading
-      setIsLoadingAILogic(true);
-      
-      // Simulate AI generating logic (in a real app, this would call an API)
-      setTimeout(async () => {
-        try {
-          if (!activeProject) {
-            setIsLoadingAILogic(false);
-            setIsRunningVerification(false);
-            return;
-          }
-          
-          const logicText = `# Auto-generated logic for ${activeProject.name}\n\nThis smart contract appears to be a ${getContractDescription(code)}.\n\nProperties to verify:\n- No integer overflow or underflow\n- No reentrancy vulnerabilities\n- Functions can only be called by authorized roles\n- State changes preserve expected invariants\n\nPlease review and edit these properties to match your verification requirements.`;
-          
-          // Create initial verification record with the AI-generated logic
-          const initialResult: Partial<VerificationResult> = {
-            project_id: activeProject.id,
-            level: VerificationLevel.DEEP,
-            status: VerificationStatus.PENDING,
-            results: [],
-            logs: ["Generated initial contract logic."],
-            spec_draft: logicText,
-            created_at: new Date().toISOString(),
-          };
-          
-          const { data: verificationRecord, error: insertError } = await supabase
-            .from('verification_results')
-            .insert(initialResult)
-            .select()
-            .single();
-            
-          if (insertError) throw insertError;
-          
-          setVerificationResult(verificationRecord);
-          setActiveVerificationTab("logic-validation"); // Only now show the logic validation tab
-          setIsLoadingAILogic(false);
-        } catch (error) {
-          console.error("Error generating logic:", error);
-          setIsLoadingAILogic(false);
-          setIsRunningVerification(false);
-          toast({
-            title: "Error",
-            description: "Failed to generate contract logic",
-            variant: "destructive"
-          });
-        }
-      }, 3000);
-      
-      return;
-    }
-    
-    setActiveVerificationTab("verification");
+  
+const handleStartVerification = async (level: string) => {
+  await handleSaveCode();
+  
+  if (!activeProject) return;
+  
+  setIsRunningVerification(true);
+  
+  if (level === VerificationLevel.DEEP) {
+    setActiveVerificationTab("verification"); // First show the verification panel with loading
+    setIsLoadingAILogic(true);
     
     try {
-      // Create initial verification record
+      if (!activeProject) {
+        setIsLoadingAILogic(false);
+        setIsRunningVerification(false);
+        return;
+      }
+      
+      // Make actual API call to generate logic
+      const apiUrl = import.meta.env.VITE_API_URL;
+      if (!apiUrl) {
+        throw new Error("API URL not configured. Please check environment variables.");
+      }
+      
+      console.log("Starting deep verification with backend at:", apiUrl);
+      
+      // Create initial verification record with pending status
       const initialResult: Partial<VerificationResult> = {
         project_id: activeProject.id,
-        level: level as VerificationLevel,
-        status: VerificationStatus.RUNNING,
+        level: VerificationLevel.DEEP,
+        status: VerificationStatus.PENDING,
         results: [],
-        logs: ["Starting verification process..."],
+        logs: ["Starting deep verification process..."],
         created_at: new Date().toISOString(),
       };
       
@@ -447,253 +412,215 @@ export default function DashboardPage() {
       if (insertError) throw insertError;
       
       setVerificationResult(verificationRecord);
-      setIsPollingResults(true);
       
-      // Simulate the verification process
-      setTimeout(async () => {
-        try {
-          // Mock verification issues
-          const mockIssues = [
-            {
-              verification_id: verificationRecord.id,
-              error_type: "Reentrancy",
-              severity: "high" as const,
-              description: "Potential reentrancy vulnerability in transfer function",
-              line_number: 45,
-              column_number: 4,
-              function_name: "transfer",
-              contract_name: activeProject?.name,
-              suggested_fix: "Consider implementing a reentrancy guard or following the checks-effects-interactions pattern",
-              code_snippet: "function transfer(address to, uint256 amount) public { ... }"
-            },
-            {
-              verification_id: verificationRecord.id,
-              error_type: "Arithmetic",
-              severity: "medium" as const,
-              description: "Potential integer overflow in calculateReward function",
-              line_number: 67,
-              column_number: 12,
-              function_name: "calculateReward",
-              contract_name: activeProject?.name,
-              suggested_fix: "Use SafeMath or Solidity 0.8+ for automatic overflow checking",
-              code_snippet: "uint256 reward = amount * rate;"
-            }
-          ];
-          
-          // Insert mock issues
-          await Promise.all(mockIssues.map(issue => 
-            supabase.from('verification_issues').insert(issue)
-          ));
-          
-          // Update the verification result
-          await supabase
-            .from('verification_results')
-            .update({
-              status: VerificationStatus.COMPLETED,
-              completed_at: new Date().toISOString(),
-              results: mockIssues,
-              logs: [
-                "Starting verification process...", 
-                "Analyzing contract structure...", 
-                "Checking for common vulnerabilities...", 
-                "Verification completed with 2 issues found"
-              ]
-            })
-            .eq('id', verificationRecord.id);
-            
-          // Fetch the updated result
-          await fetchLatestVerificationResult(activeProject.id);
-          
-          toast({
-            title: "Verification complete",
-            description: "Contract verification has completed. Check the results for details.",
-          });
-        } catch (error: any) {
-          console.error("Error in verification simulation:", error);
-          
-          // Update status to failed if there's an error
-          await supabase
-            .from('verification_results')
-            .update({
-              status: VerificationStatus.FAILED,
-              completed_at: new Date().toISOString(),
-              error_message: error.message
-            })
-            .eq('id', verificationRecord.id);
-            
-          await fetchLatestVerificationResult(activeProject.id);
-        } finally {
-          setIsRunningVerification(false);
-        }
-      }, 5000);
-      
-    } catch (error: any) {
-      console.error("Error starting verification:", error);
-      setIsRunningVerification(false);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to start verification",
-        variant: "destructive"
+      // Now make actual API call to backend
+      const response = await fetch(`${apiUrl}/generate_logic`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          project_id: activeProject.id,
+          code: activeProject.code,
+          verification_id: verificationRecord.id
+        }),
       });
-    }
-  };
-
-  const handleConfirmLogic = async (logicText: string) => {
-    if (!activeProject || !verificationResult) return;
-    
-    try {
-      // Update the verification result with confirmed logic
-      const { error } = await supabase
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("API error:", errorText);
+        throw new Error(`API request failed: ${response.statusText}`);
+      }
+      
+      const logicResponse = await response.json();
+      console.log("Logic generation response:", logicResponse);
+      
+      // Update verification record with generated logic
+      await supabase
         .from('verification_results')
         .update({
-          spec_draft: logicText,
-          status: VerificationStatus.RUNNING,
-          logs: [...(verificationResult.logs || []), "Logic confirmed by user. Starting verification..."]
+          spec_draft: logicResponse.spec || "# Logic generation failed. Please try again.",
+          status: VerificationStatus.AWAITING_CONFIRMATION,
         })
-        .eq('id', verificationResult.id);
-        
-      if (error) throw error;
+        .eq('id', verificationRecord.id);
       
-      // Set active tab back to verification
-      setActiveVerificationTab("verification");
-      setIsPollingResults(true);
-      
-      // Fetch the updated verification result
+      // Refresh verification record
       await fetchLatestVerificationResult(activeProject.id);
       
-      // Simulate the backend processing (in a real app, this would be done by the backend)
-      setTimeout(async () => {
-        try {
-          if (!verificationResult) return;
-          
-          // Generate mock CVL code
-          const mockCvlCode = `
-/*
- * Generated CVL code for advanced verification
- * Based on user-confirmed logic
- */
-
-// Import Certora prover library
-using CertoraProver;
-
-// Define rules
-rule noReentrancy(method f) {
-    env e;
-    calldataarg args;
-    
-    // Check for reentrancy
-    f(e, args);
-    
-    // Assert no reentrancy
-    assert !lastReverted, "Method should not revert";
-}
-
-rule preservesTotalSupply(method f) {
-    env e;
-    calldataarg args;
-    
-    uint256 totalSupplyBefore = totalSupply();
-    
-    f(e, args);
-    
-    uint256 totalSupplyAfter = totalSupply();
-    
-    assert totalSupplyBefore == totalSupplyAfter, "Total supply should remain constant";
-}
-
-// Add more rules based on confirmed logic
-`;
-          
-          // Mock verification issues
-          const mockIssues = [
-            {
-              verification_id: verificationResult.id,
-              error_type: "Reentrancy",
-              severity: "high" as const,
-              description: "Potential reentrancy vulnerability in transfer function",
-              line_number: 45,
-              column_number: 4,
-              function_name: "transfer",
-              contract_name: activeProject?.name,
-              suggested_fix: "Consider implementing a reentrancy guard or following the checks-effects-interactions pattern",
-              code_snippet: "function transfer(address to, uint256 amount) public { ... }"
-            },
-            {
-              verification_id: verificationResult.id,
-              error_type: "Arithmetic",
-              severity: "medium" as const,
-              description: "Potential integer overflow in calculateReward function",
-              line_number: 67,
-              column_number: 12,
-              function_name: "calculateReward",
-              contract_name: activeProject?.name,
-              suggested_fix: "Use SafeMath or Solidity 0.8+ for automatic overflow checking",
-              code_snippet: "uint256 reward = amount * rate;"
-            }
-          ];
-          
-          // Insert mock issues
-          for (const issue of mockIssues) {
-            await supabase.from('verification_issues').insert(issue);
-          }
-          
-          // Update the verification result
-          await supabase
-            .from('verification_results')
-            .update({
-              status: VerificationStatus.COMPLETED,
-              cvl_code: mockCvlCode,
-              spec_used: verificationResult.spec_draft, // Use the spec_draft as the final spec used
-              completed_at: new Date().toISOString(),
-              results: mockIssues,
-              logs: [...(verificationResult.logs || []), 
-                "Generated CVL code from logic", 
-                "Running Certora Prover...", 
-                "Verification completed with 2 issues found"]
-            })
-            .eq('id', verificationResult.id);
-            
-          // Fetch the updated result
-          await fetchLatestVerificationResult(activeProject.id);
-          
-          toast({
-            title: "Verification complete",
-            description: "Advanced verification has completed. Check the results tab for details.",
-          });
-        } catch (error: any) {
-          console.error("Error in verification process:", error);
-          
-          // Update status to failed
-          await supabase
-            .from('verification_results')
-            .update({
-              status: VerificationStatus.FAILED,
-              completed_at: new Date().toISOString(),
-              error_message: error.message || "Unknown error during verification"
-            })
-            .eq('id', verificationResult.id);
-            
-          await fetchLatestVerificationResult(activeProject.id);
-          
-          toast({
-            title: "Verification failed",
-            description: error.message || "An error occurred during verification",
-            variant: "destructive"
-          });
-        } finally {
-          setIsRunningVerification(false);
-          setIsPollingResults(false);
-        }
-      }, 5000);
-    } catch (error: any) {
-      console.error("Error confirming logic:", error);
+      // Switch to the logic validation tab after specs are generated
+      setActiveVerificationTab("logic-validation");
+      
+    } catch (error) {
+      console.error("Error in deep verification:", error);
       toast({
-        title: "Error",
-        description: error.message || "Failed to process verification",
+        title: "Verification Error",
+        description: error instanceof Error ? error.message : "Failed to generate verification logic",
         variant: "destructive"
       });
+      
+      // Update status to failed if there's an error
+      if (verificationResult?.id) {
+        await supabase
+          .from('verification_results')
+          .update({
+            status: VerificationStatus.FAILED,
+            error_message: error instanceof Error ? error.message : "Unknown error",
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', verificationResult.id);
+      }
+    } finally {
+      setIsLoadingAILogic(false);
     }
-  };
+    
+    return;
+  }
+  
+  // Simple verification flow
+  setActiveVerificationTab("verification");
+  
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (!apiUrl) {
+      throw new Error("API URL not configured. Please check environment variables.");
+    }
+    
+    console.log("Starting simple verification with backend at:", apiUrl);
+    
+    // Create initial verification record
+    const initialResult: Partial<VerificationResult> = {
+      project_id: activeProject.id,
+      level: level as VerificationLevel,
+      status: VerificationStatus.RUNNING,
+      results: [],
+      logs: ["Starting verification process..."],
+      created_at: new Date().toISOString(),
+    };
+    
+    const { data: verificationRecord, error: insertError } = await supabase
+      .from('verification_results')
+      .insert(initialResult)
+      .select()
+      .single();
+      
+    if (insertError) throw insertError;
+    
+    setVerificationResult(verificationRecord);
+    setIsPollingResults(true);
+    
+    // Make actual API call to backend
+    const response = await fetch(`${apiUrl}/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        project_id: activeProject.id,
+        code: activeProject.code,
+        verification_id: verificationRecord.id,
+        level: level
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("API error:", errorText);
+      throw new Error(`API request failed: ${response.statusText}`);
+    }
+    
+    // Start polling for results
+    startPolling(activeProject.id, verificationRecord.id);
+    
+  } catch (error) {
+    console.error("Error starting verification:", error);
+    setIsRunningVerification(false);
+    setIsPollingResults(false);
+    
+    toast({
+      title: "Verification Error",
+      description: error instanceof Error ? error.message : "Failed to start verification",
+      variant: "destructive"
+    });
+  }
+};
+
+const handleConfirmLogic = async (logicText: string) => {
+  if (!activeProject || !verificationResult) return;
+  
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (!apiUrl) {
+      throw new Error("API URL not configured. Please check environment variables.");
+    }
+    
+    console.log("Confirming logic with backend at:", apiUrl);
+    
+    // Update the verification result with confirmed logic
+    const { error } = await supabase
+      .from('verification_results')
+      .update({
+        spec_draft: logicText,
+        status: VerificationStatus.RUNNING,
+        logs: [...(verificationResult.logs || []), "Logic confirmed by user. Starting verification..."]
+      })
+      .eq('id', verificationResult.id);
+      
+    if (error) throw error;
+    
+    // Set active tab back to verification
+    setActiveVerificationTab("verification");
+    setIsPollingResults(true);
+    
+    // Make actual API call to backend with confirmed logic
+    const response = await fetch(`${apiUrl}/verify_with_logic`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        project_id: activeProject.id,
+        code: activeProject.code,
+        verification_id: verificationResult.id,
+        logic: logicText
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("API error:", errorText);
+      throw new Error(`API request failed: ${response.statusText}`);
+    }
+    
+    // Start polling for results
+    startPolling(activeProject.id, verificationResult.id);
+    
+    toast({
+      title: "Verification In Progress",
+      description: "Your logic has been confirmed and verification has started",
+    });
+    
+  } catch (error) {
+    console.error("Error confirming logic:", error);
+    toast({
+      title: "Error",
+      description: error instanceof Error ? error.message : "Failed to process verification",
+      variant: "destructive"
+    });
+    
+    // Update status to failed if there's an error
+    await supabase
+      .from('verification_results')
+      .update({
+        status: VerificationStatus.FAILED,
+        error_message: error instanceof Error ? error.message : "Unknown error",
+        completed_at: new Date().toISOString()
+      })
+      .eq('id', verificationResult.id);
+      
+    setIsRunningVerification(false);
+    setIsPollingResults(false);
+  }
+};
 
   const handleCancelLogicValidation = async () => {
     if (!verificationResult) return;

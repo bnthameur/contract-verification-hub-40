@@ -92,16 +92,45 @@ export function VerificationPanel({
     // Check backend connection
     const checkBackend = async () => {
       try {
-        // Simple check to see if Supabase is accessible
+        const apiUrl = import.meta.env.VITE_API_URL;
+        if (!apiUrl) {
+          console.error("API URL not configured in environment variables");
+          setBackendConnected(false);
+          return;
+        }
+        
+        // First check if Supabase is accessible as a basic connectivity test
         const { error } = await supabase.from('projects').select('count', { count: 'exact' }).limit(1);
-        setBackendConnected(!error);
+        
+        // Now check if the API backend is accessible
+        try {
+          const response = await fetch(`${apiUrl}/ping`, { 
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            // Adding cache control to prevent caching issues during polling
+            cache: 'no-store'
+          });
+          
+          if (!response.ok) {
+            console.error("Backend API not accessible:", await response.text());
+            setBackendConnected(false);
+            return;
+          }
+          
+          // If both checks pass, backend is connected
+          setBackendConnected(!error && response.ok);
+        } catch (apiError) {
+          console.error("Error connecting to API backend:", apiError);
+          setBackendConnected(false);
+        }
       } catch (error) {
+        console.error("Error checking backend connection:", error);
         setBackendConnected(false);
       }
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 60000); // Check every minute
+    const interval = setInterval(checkBackend, 30000); // Check every 30 seconds
     return () => clearInterval(interval);
   }, []);
 
@@ -171,14 +200,20 @@ export function VerificationPanel({
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Backend Disconnected</AlertTitle>
             <AlertDescription>
-              We're having trouble connecting to our backend services. Please check your internet connection and try again.
+              <p className="mb-2">We're having trouble connecting to our backend verification services.</p>
+              <ul className="list-disc list-inside text-sm">
+                <li>Check if API URL is correctly configured: {import.meta.env.VITE_API_URL || "Not set"}</li>
+                <li>Ensure your internet connection is stable</li>
+                <li>The verification service may be temporarily unavailable</li>
+              </ul>
             </AlertDescription>
           </Alert>
           <Button 
             onClick={() => window.location.reload()}
             className="w-full mt-2"
           >
-            Reload Page
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry Connection
           </Button>
         </div>
       );

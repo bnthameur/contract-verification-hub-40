@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, CheckCircle, Shield, Edit2, X } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
+import { useToast } from "@/hooks/use-toast";
 
 interface LogicValidationProps {
   project_id: string;
@@ -28,6 +29,7 @@ export function LogicValidation({
   const [isEditing, setIsEditing] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
   const { theme } = useTheme();
+  const { toast } = useToast();
   const isDark = theme === "dark";
   
   // Initialize the logic text when result changes
@@ -39,7 +41,16 @@ export function LogicValidation({
   
   const handleConfirmLogic = () => {
     if (logicText) {
-      onConfirmLogic(logicText);
+      try {
+        onConfirmLogic(logicText);
+      } catch (error) {
+        console.error("Error confirming logic:", error);
+        toast({
+          title: "Error",
+          description: "Failed to confirm logic. Please try again.",
+          variant: "destructive"
+        });
+      }
     }
   };
 
