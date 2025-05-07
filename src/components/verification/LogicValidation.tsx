@@ -90,8 +90,8 @@ export function LogicValidation({
   }
   
   return (
-    <Card className={`h-full flex flex-col border-0 ${isDark ? 'bg-background' : 'bg-background'}`}>
-      <CardHeader className={`border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+    <Card className="h-full flex flex-col border-0 bg-background">
+      <CardHeader className="border-b border-border">
         <CardTitle className="flex items-center">
           <Shield className="h-5 w-5 mr-2 text-primary" />
           Contract Logic
@@ -104,7 +104,7 @@ export function LogicValidation({
       <CardContent className="flex-1 relative p-0">
         <div className="relative h-full w-full">
           <Textarea 
-            className={`h-full font-mono text-sm border-0 p-4 resize-none ${isDark ? 'bg-background text-foreground' : 'bg-background text-foreground'} ${isEditing ? '' : 'pointer-events-none'}`}
+            className={`h-full font-mono text-sm border-0 p-4 resize-none bg-background text-foreground ${isEditing ? '' : 'pointer-events-none'}`}
             placeholder="AI will generate formal verification logic for your contract..."
             value={logicText}
             onChange={(e) => setLogicText(e.target.value)}
@@ -113,7 +113,7 @@ export function LogicValidation({
           {showOverlay && !isEditing && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-sm z-10">
               <div 
-                className={`${isDark ? 'bg-card/30' : 'bg-card/30'} backdrop-blur-lg rounded-lg p-6 cursor-pointer hover:bg-opacity-40 transition-all border border-primary/20`}
+                className="bg-card/30 backdrop-blur-lg rounded-lg p-6 cursor-pointer hover:bg-opacity-40 transition-all border border-primary/20"
                 onClick={handleEditClick}
               >
                 <Edit2 className="h-8 w-8 mx-auto mb-3 text-primary opacity-80" />
@@ -124,7 +124,7 @@ export function LogicValidation({
         </div>
       </CardContent>
       
-      <CardFooter className={`flex justify-between p-4 border-t ${isDark ? 'border-gray-800' : 'border-gray-200'} bg-card/50`}>
+      <CardFooter className="flex justify-between p-4 border-t border-border bg-card/50">
         <Button 
           variant="ghost"
           onClick={onCancel}

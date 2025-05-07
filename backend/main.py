@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 import os
@@ -752,6 +753,13 @@ async def finalize_deep_verification(project_id: str, verification_id: str, appr
         update_verification_status(verification_id, "failed", error_data)
 
 # API Endpoints
+
+# Add a proper ping endpoint that returns a successful response
+@app.get("/ping")
+async def ping():
+    """Simple ping endpoint to check if the API is running"""
+    return {"status": "ok", "message": "Smart Contract Verification API is healthy"}
+
 @app.post("/verify/simple", response_model=VerificationResponse)
 async def verify_simple(request: VerificationRequest, background_tasks: BackgroundTasks):
     """Simple verification using Slither"""
