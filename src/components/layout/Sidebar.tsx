@@ -1,11 +1,8 @@
+
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-<<<<<<< HEAD
 import { PlusCircle, FolderPlus, Search, MoreHorizontal, Edit, Trash, ChevronLeft, ChevronRight } from "lucide-react";
-=======
-import { PlusCircle, FolderPlus, Search, MoreHorizontal, Edit, Trash, ChevronLeft } from "lucide-react";
->>>>>>> 263820cf15f81e461251b718b2d58692e1c7f758
 import { useState } from "react";
 import { Project } from "@/types";
 import { 
@@ -44,11 +41,7 @@ export function Sidebar({
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
-<<<<<<< HEAD
   const [collapsed, setCollapsed] = useState(false);
-=======
-  const [isCollapsed, setIsCollapsed] = useState(false);
->>>>>>> 263820cf15f81e461251b718b2d58692e1c7f758
   const { toast } = useToast();
 
   const filteredProjects = projects.filter((project) =>
@@ -129,7 +122,6 @@ export function Sidebar({
   };
 
   return (
-<<<<<<< HEAD
     <div className={cn(
       "group flex flex-col h-full bg-background border-r transition-all duration-300",
       collapsed ? "w-[60px]" : "w-[240px]"
@@ -140,20 +132,6 @@ export function Sidebar({
         )}
         <div className="flex items-center">
           {!collapsed && (
-=======
-    <Collapsible 
-      open={!isCollapsed} 
-      onOpenChange={(open) => setIsCollapsed(!open)} 
-      className={cn(
-        "group flex flex-col h-full bg-background border-r transition-all duration-300",
-        isCollapsed ? "w-[60px]" : "w-[280px]"
-      )}
-    >
-      <div className="flex items-center justify-between p-4">
-        {!isCollapsed && <h2 className="text-lg font-semibold">Projects</h2>}
-        <div className="flex gap-2 ml-auto">
-          {!isCollapsed && (
->>>>>>> 263820cf15f81e461251b718b2d58692e1c7f758
             <Button 
               variant="ghost" 
               size="icon" 
@@ -163,7 +141,6 @@ export function Sidebar({
               <PlusCircle className="h-5 w-5 text-primary" />
             </Button>
           )}
-<<<<<<< HEAD
           <Button
             variant="ghost" 
             size="icon" 
@@ -171,7 +148,7 @@ export function Sidebar({
             onClick={() => setCollapsed(!collapsed)}
             className="mr-2-2 transition-all duration-300 group-hover:opacity-100"
           >
-            {collapsed ?<ChevronRight className="h-4 w-5" />:<ChevronLeft className="h-5 w-5" />}
+            {collapsed ? <ChevronRight className="h-4 w-5" /> : <ChevronLeft className="h-5 w-5" />}
           </Button>
         </div>
       </div>
@@ -222,30 +199,6 @@ export function Sidebar({
             ))}
           </div>
         ) : (
-=======
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <ChevronLeft className={cn("h-4 w-4 transition-transform", isCollapsed && "rotate-180")} />
-            </Button>
-          </CollapsibleTrigger>
-        </div>
-      </div>
-      
-      <CollapsibleContent className="flex-grow flex flex-col">
-        <div className="relative px-4 mb-4">
-          <Search className="absolute left-6 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search projects..."
-            className="pl-8"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        
-        <Separator className="my-2" />
-        
-        <ScrollArea className="flex-grow px-2 overflow-y-auto">
->>>>>>> 263820cf15f81e461251b718b2d58692e1c7f758
           <div className="space-y-1 py-2">
             {filteredProjects.length > 0 ? (
               filteredProjects.map((project) => (
@@ -316,26 +269,8 @@ export function Sidebar({
               </div>
             )}
           </div>
-<<<<<<< HEAD
         )}
       </ScrollArea>
-=======
-        </ScrollArea>
-      </CollapsibleContent>
-
-      {isCollapsed && (
-        <div className="flex flex-col items-center py-4">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            aria-label="Create project"
-            onClick={onCreateProject}
-          >
-            <PlusCircle className="h-5 w-5 text-primary" />
-          </Button>
-        </div>
-      )}
->>>>>>> 263820cf15f81e461251b718b2d58692e1c7f758
 
       {/* Edit Project Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
@@ -370,6 +305,6 @@ export function Sidebar({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Collapsible>
+    </div>
   );
 }
