@@ -45,6 +45,14 @@ const App = () => {
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="/verification-history/:projectId"
+                  element={
+                    <ProtectedRoute>
+                      <VerificationHistoryPage />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>
