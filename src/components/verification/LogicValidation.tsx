@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, CheckCircle, Shield, Edit2, X } from "lucide-react";
+import { useTheme } from "@/hooks/use-theme";
 
 interface LogicValidationProps {
   project_id: string;
@@ -26,6 +27,8 @@ export function LogicValidation({
   const [logicText, setLogicText] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   
   // Initialize the logic text when result changes
   useEffect(() => {
@@ -76,13 +79,13 @@ export function LogicValidation({
   }
   
   return (
-    <Card className="h-full flex flex-col bg-black text-white border-0">
-      <CardHeader className="bg-black text-white border-b border-gray-800">
-        <CardTitle className="flex items-center text-white">
+    <Card className={`h-full flex flex-col border-0 ${isDark ? 'bg-background' : 'bg-background'}`}>
+      <CardHeader className={`border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+        <CardTitle className="flex items-center">
           <Shield className="h-5 w-5 mr-2 text-primary" />
           Contract Logic
         </CardTitle>
-        <CardDescription className="text-gray-400">
+        <CardDescription>
           Review and edit the generated verification logic
         </CardDescription>
       </CardHeader>
@@ -90,31 +93,30 @@ export function LogicValidation({
       <CardContent className="flex-1 relative p-0">
         <div className="relative h-full w-full">
           <Textarea 
-            className={`h-full font-mono text-sm bg-black text-white border-0 p-4 resize-none ${isEditing ? '' : 'pointer-events-none'}`}
+            className={`h-full font-mono text-sm border-0 p-4 resize-none ${isDark ? 'bg-background text-foreground' : 'bg-background text-foreground'} ${isEditing ? '' : 'pointer-events-none'}`}
             placeholder="AI will generate formal verification logic for your contract..."
             value={logicText}
             onChange={(e) => setLogicText(e.target.value)}
           />
           
           {showOverlay && !isEditing && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm z-10">
+            <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-sm z-10">
               <div 
-                className="bg-white bg-opacity-20 backdrop-blur-lg rounded-lg p-6 cursor-pointer hover:bg-opacity-30 transition-all border border-white border-opacity-20"
+                className={`${isDark ? 'bg-card/30' : 'bg-card/30'} backdrop-blur-lg rounded-lg p-6 cursor-pointer hover:bg-opacity-40 transition-all border border-primary/20`}
                 onClick={handleEditClick}
               >
-                <Edit2 className="h-8 w-8 mx-auto mb-3 text-white opacity-80" />
-                <p className="text-white text-lg font-medium">Click to Edit</p>
+                <Edit2 className="h-8 w-8 mx-auto mb-3 text-primary opacity-80" />
+                <p className="text-foreground text-lg font-medium">Click to Edit</p>
               </div>
             </div>
           )}
         </div>
       </CardContent>
       
-      <CardFooter className="flex justify-between border-t border-gray-800 p-4 bg-black">
+      <CardFooter className={`flex justify-between p-4 border-t ${isDark ? 'border-gray-800' : 'border-gray-200'} bg-card/50`}>
         <Button 
           variant="ghost"
           onClick={onCancel}
-          className="text-gray-400 hover:text-white hover:bg-gray-800"
         >
           <X className="mr-2 h-4 w-4" />
           Cancel
@@ -135,7 +137,6 @@ export function LogicValidation({
           <Button 
             onClick={handleEditClick} 
             variant="outline"
-            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
           >
             <Edit2 className="mr-2 h-4 w-4" />
             Edit Logic

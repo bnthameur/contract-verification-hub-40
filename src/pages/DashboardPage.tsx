@@ -1,4 +1,3 @@
-
 import { Navbar } from "@/components/layout/Navbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ResizableLayout } from "@/components/layout/ResizableLayout";
@@ -375,7 +374,7 @@ export default function DashboardPage() {
     setIsRunningVerification(true);
     
     if (level === VerificationLevel.DEEP) {
-      setActiveVerificationTab("logic-validation");
+      setActiveVerificationTab("verification"); // First show the verification panel with loading
       setIsLoadingAILogic(true);
       
       // Simulate AI generating logic (in a real app, this would call an API)
@@ -409,6 +408,7 @@ export default function DashboardPage() {
           if (insertError) throw insertError;
           
           setVerificationResult(verificationRecord);
+          setActiveVerificationTab("logic-validation"); // Only now show the logic validation tab
           setIsLoadingAILogic(false);
         } catch (error) {
           console.error("Error generating logic:", error);
@@ -839,9 +839,9 @@ rule preservesTotalSupply(method f) {
                   </TabsContent>
 
                   <TabsContent value="tests" className="flex-1 p-0 overflow-hidden">
-                    {verificationResult?.spec_used ? (
+                    {verificationResult?.cvl_code ? (
                       <MonacoEditor 
-                        value={verificationResult.spec_used}
+                        value={verificationResult.cvl_code}
                         onChange={() => {}}
                         options={{
                           readOnly: true,
@@ -873,12 +873,25 @@ rule preservesTotalSupply(method f) {
             <div className="h-full">
               <Tabs
                 value={activeVerificationTab}
-                onValueChange={val => setActiveVerificationTab(val as "verification" | "logic-validation")}
+                onValueChange={(val) => {
+                  // Only allow switching to logic-validation if we're in the right state
+                  if (val === "logic-validation" && 
+                      !(verificationResult?.status === VerificationStatus.PENDING || 
+                        verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION)) {
+                    return;
+                  }
+                  setActiveVerificationTab(val as "verification" | "logic-validation");
+                }}
                 className="h-full"
               >
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="verification">Verification</TabsTrigger>
-                  <TabsTrigger value="logic-validation">Logic Validation</TabsTrigger>
+                  <TabsTrigger value="logic-validation" disabled={
+                    !(verificationResult?.status === VerificationStatus.PENDING || 
+                      verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION)
+                  }>
+                    Logic Validation
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="verification" className="h-[calc(100%-45px)] overflow-hidden">

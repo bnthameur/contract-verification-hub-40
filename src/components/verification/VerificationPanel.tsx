@@ -1,4 +1,3 @@
-
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { VerificationIssuesList } from "@/components/verification/VerificationIssuesList";
@@ -364,15 +363,26 @@ export function VerificationPanel({
                   
                   <Card>
                     <CardContent className="p-4">
-                      <div className="text-2xl font-bold capitalize">{verificationLevel}</div>
+                      <div className="text-2xl font-bold capitalize">
+                        {verificationResult.level === VerificationLevel.SIMPLE ? "Simple" : 
+                         verificationResult.level === VerificationLevel.DEEP ? "Deep" : 
+                         verificationResult.level}
+                      </div>
                       <div className="text-sm text-muted-foreground">Verification Level</div>
                     </CardContent>
                   </Card>
                 </div>
                 
-                {verificationResult?.spec_draft && (
+                {verificationResult?.cvl_code ? (
                   <div className="mt-6">
                     <h4 className="text-sm font-medium mb-2">Generated CVL Code</h4>
+                    <pre className="text-xs bg-muted p-4 rounded-md overflow-auto max-h-40">
+                      {verificationResult.cvl_code}
+                    </pre>
+                  </div>
+                ) : verificationResult?.spec_draft && (
+                  <div className="mt-6">
+                    <h4 className="text-sm font-medium mb-2">Generated Logic Specification</h4>
                     <pre className="text-xs bg-muted p-4 rounded-md overflow-auto max-h-40">
                       {verificationResult.spec_draft}
                     </pre>
