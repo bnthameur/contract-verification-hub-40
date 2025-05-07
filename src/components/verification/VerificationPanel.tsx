@@ -8,7 +8,7 @@ import { useState, useEffect } from "react";
 import { LogicValidation } from "@/components/verification/LogicValidation";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ShieldAlert, ShieldCheck, History, ChevronDown, AlertCircle } from "lucide-react";
+import { Loader2, ShieldAlert, ShieldCheck, History, ChevronDown, AlertCircle, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   Select,
@@ -86,7 +86,9 @@ export function VerificationPanel({
   const [loadingMessage, setLoadingMessage] = useState<string>("");
   const [messageIndex, setMessageIndex] = useState(0);
   const [backendConnected, setBackendConnected] = useState<boolean>(true);
+  const [showNewVerification, setShowNewVerification] = useState<boolean>(false);
   const { toast } = useToast();
+  
   useEffect(() => {
     // Check backend connection
     const checkBackend = async () => {
@@ -148,6 +150,7 @@ export function VerificationPanel({
     if (!project) return;
     try {
       await onStartVerification(level);
+      setShowNewVerification(false);
     } catch (error: any) {
       toast({
         title: "Verification failed",
@@ -217,25 +220,96 @@ export function VerificationPanel({
       );
     }
     
+    // Show new verification form if button was clicked
+    if (showNewVerification) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-6">
+          <ShieldCheck className="h-16 w-16 text-muted-foreground mb-4" />
+          <h3 className="text-xl font-semibold mb-2">Start New Verification</h3>
+          <p className="text-muted-foreground text-center max-w-md mb-6">
+            Select a verification level to analyze your smart contract for issues and vulnerabilities.
+          </p>
+          <div className="space-y-4 w-full max-w-sm">
+            <div className="space-y-2">
+              <Select 
+                value={verificationLevel} 
+                onValueChange={setVerificationLevel}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select verification level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="simple">Simple Verification</SelectItem>
+                  <SelectItem value="deep">Deep Verification</SelectItem>
+                  <SelectItem value="advanced" disabled>Advanced Verification (Coming Soon)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {verificationLevel === "simple" && "Quick analysis to detect common vulnerabilities"}
+                {verificationLevel === "deep" && "AI-powered formal verification with logic validation"}
+                {verificationLevel === "advanced" && "Advanced formal verification with custom properties"}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowNewVerification(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => handleVerify(verificationLevel)}
+                disabled={!project || !verificationLevel}
+                className="flex-1"
+              >
+                Start Verification
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
     // Show completed verification with results
-    if (isCompleted) {
+    if (isCompleted && verificationResult) {
       return (
         <div className="flex flex-col h-full">
           <div className="border-b px-4 py-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <ShieldCheck className="h-5 w-5 text-green-500 mr-2" />
-                <span className="font-medium">Verification Completed</span>
+                <span className="font-medium">Verification Results</span>
               </div>
               <Button 
                 variant="outline" 
-                size="sm" 
-                onClick={() => setVerificationLevel(activeTab)}
+                size="sm"
+                onClick={() => setShowNewVerification(true)}
+                className="gap-1.5"
               >
-                Rerun Verification
+                <RefreshCw className="h-4 w-4" />
+                New Verification
               </Button>
             </div>
           </div>
+          
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm font-medium">Level:</span>
+              <span className="text-sm capitalize bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                {verificationResult.level}
+              </span>
+              <span className="text-xs text-muted-foreground ml-auto">
+                {verificationResult.completed_at && new Date(verificationResult.completed_at).toLocaleDateString()}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Issues found:</span>
+              <span className="text-sm font-semibold">{issues.length}</span>
+            </div>
+          </div>
+          
+          <Separator />
           
           <Tabs value={activeResultTab} onValueChange={setActiveResultTab} className="flex-1 flex flex-col">
             <div className="px-4 pt-2">
@@ -322,52 +396,67 @@ export function VerificationPanel({
             Please try again or contact support if the issue persists.
           </p>
           <Button
-            onClick={() => handleVerify(verificationLevel)}
+            onClick={() => setShowNewVerification(true)}
             className="mt-2"
           >
-            Retry Verification
+            Try Again
           </Button>
         </div>
       );
     }
     
-    // Show empty/start state
+    // Show empty state for projects without verification history
+    if (!verificationResult) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-6">
+          <ShieldCheck className="h-16 w-16 text-muted-foreground mb-4" />
+          <h3 className="text-xl font-semibold mb-2">Verify Your Contract</h3>
+          <p className="text-muted-foreground text-center max-w-md mb-6">
+            Select a verification level to analyze your smart contract for issues and vulnerabilities.
+          </p>
+          <div className="space-y-4 w-full max-w-sm">
+            <div className="space-y-2">
+              <Select 
+                value={verificationLevel} 
+                onValueChange={setVerificationLevel}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select verification level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="simple">Simple Verification</SelectItem>
+                  <SelectItem value="deep">Deep Verification</SelectItem>
+                  <SelectItem value="advanced" disabled>Advanced Verification (Coming Soon)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {verificationLevel === "simple" && "Quick analysis to detect common vulnerabilities"}
+                {verificationLevel === "deep" && "AI-powered formal verification with logic validation"}
+                {verificationLevel === "advanced" && "Advanced formal verification with custom properties"}
+              </p>
+            </div>
+            <Button
+              onClick={() => handleVerify(verificationLevel)}
+              disabled={!project || !verificationLevel}
+              className="w-full"
+            >
+              Start Verification
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    
+    // Default return for any other state
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
-        <ShieldCheck className="h-16 w-16 text-muted-foreground mb-4" />
-        <h3 className="text-xl font-semibold mb-2">Verify Your Contract</h3>
-        <p className="text-muted-foreground text-center max-w-md mb-6">
-          Select a verification level to analyze your smart contract for issues and vulnerabilities.
-        </p>
-        <div className="space-y-4 w-full max-w-sm">
-          <div className="space-y-2">
-            <Select 
-              value={verificationLevel} 
-              onValueChange={setVerificationLevel}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select verification level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="simple">Simple Verification</SelectItem>
-                <SelectItem value="deep">Deep Verification</SelectItem>
-                <SelectItem value="advanced" disabled>Advanced Verification (Coming Soon)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {verificationLevel === "simple" && "Quick analysis to detect common vulnerabilities"}
-              {verificationLevel === "deep" && "AI-powered formal verification with logic validation"}
-              {verificationLevel === "advanced" && "Advanced formal verification with custom properties"}
-            </p>
-          </div>
-          <Button
-            onClick={() => handleVerify(verificationLevel)}
-            disabled={!project || !verificationLevel}
-            className="w-full"
-          >
-            Start Verification
-          </Button>
-        </div>
+        <Button
+          onClick={() => setShowNewVerification(true)}
+          className="gap-1.5"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Start New Verification
+        </Button>
       </div>
     );
   };

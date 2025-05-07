@@ -1,9 +1,10 @@
+
 import { VerificationLevel, VerificationResult, VerificationStatus } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useEffect } from "react";
-import { Loader2, CheckCircle, Shield } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Loader2, CheckCircle, Shield, Edit2, X } from "lucide-react";
 
 interface LogicValidationProps {
   project_id: string;
@@ -23,6 +24,8 @@ export function LogicValidation({
   isLoadingAILogic
 }: LogicValidationProps) {
   const [logicText, setLogicText] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(true);
   
   // Initialize the logic text when result changes
   useEffect(() => {
@@ -36,6 +39,11 @@ export function LogicValidation({
       onConfirmLogic(logicText);
     }
   };
+
+  const handleEditClick = useCallback(() => {
+    setIsEditing(true);
+    setShowOverlay(false);
+  }, []);
   
   const isGenerating = isLoadingAILogic || (result?.status === VerificationStatus.PENDING);
   const isConfirming = result?.status === VerificationStatus.AWAITING_CONFIRMATION;
@@ -68,41 +76,71 @@ export function LogicValidation({
   }
   
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader>
-        <CardTitle className="flex items-center">
+    <Card className="h-full flex flex-col bg-black text-white border-0">
+      <CardHeader className="bg-black text-white border-b border-gray-800">
+        <CardTitle className="flex items-center text-white">
           <Shield className="h-5 w-5 mr-2 text-primary" />
-          Contract Logic Validation
+          Contract Logic
         </CardTitle>
-        <CardDescription>
-          Review and edit the AI-generated contract logic before verification
+        <CardDescription className="text-gray-400">
+          Review and edit the generated verification logic
         </CardDescription>
       </CardHeader>
       
-      <CardContent className="flex-1">
-        <Textarea 
-          className="h-full font-mono text-sm"
-          placeholder="AI will generate formal verification logic for your contract..."
-          value={logicText}
-          onChange={(e) => setLogicText(e.target.value)}
-        />
+      <CardContent className="flex-1 relative p-0">
+        <div className="relative h-full w-full">
+          <Textarea 
+            className={`h-full font-mono text-sm bg-black text-white border-0 p-4 resize-none ${isEditing ? '' : 'pointer-events-none'}`}
+            placeholder="AI will generate formal verification logic for your contract..."
+            value={logicText}
+            onChange={(e) => setLogicText(e.target.value)}
+          />
+          
+          {showOverlay && !isEditing && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm z-10">
+              <div 
+                className="bg-white bg-opacity-20 backdrop-blur-lg rounded-lg p-6 cursor-pointer hover:bg-opacity-30 transition-all border border-white border-opacity-20"
+                onClick={handleEditClick}
+              >
+                <Edit2 className="h-8 w-8 mx-auto mb-3 text-white opacity-80" />
+                <p className="text-white text-lg font-medium">Click to Edit</p>
+              </div>
+            </div>
+          )}
+        </div>
       </CardContent>
       
-      <CardFooter className="flex justify-between border-t p-4">
+      <CardFooter className="flex justify-between border-t border-gray-800 p-4 bg-black">
         <Button 
-          variant="outline"
+          variant="ghost"
           onClick={onCancel}
+          className="text-gray-400 hover:text-white hover:bg-gray-800"
         >
+          <X className="mr-2 h-4 w-4" />
           Cancel
         </Button>
         
-        <Button 
-          onClick={handleConfirmLogic} 
-          disabled={!logicText}
-        >
-          <CheckCircle className="mr-2 h-4 w-4" />
-          Confirm Logic
-        </Button>
+        {isEditing && (
+          <Button 
+            onClick={handleConfirmLogic} 
+            disabled={!logicText}
+            className="bg-primary hover:bg-primary/90"
+          >
+            <CheckCircle className="mr-2 h-4 w-4" />
+            Confirm Logic
+          </Button>
+        )}
+        
+        {!isEditing && (
+          <Button 
+            onClick={handleEditClick} 
+            variant="outline"
+            className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+          >
+            <Edit2 className="mr-2 h-4 w-4" />
+            Edit Logic
+          </Button>
+        )}
       </CardFooter>
     </Card>
   );

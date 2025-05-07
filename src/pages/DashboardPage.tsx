@@ -1,3 +1,4 @@
+
 import { Navbar } from "@/components/layout/Navbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ResizableLayout } from "@/components/layout/ResizableLayout";
@@ -7,7 +8,7 @@ import { LogicValidation } from "@/components/verification/LogicValidation";
 import { Project, VerificationResult, VerificationLevel, VerificationStatus } from "@/types";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Save, Upload, FileSymlink, PlusCircle, FileCode, File } from "lucide-react";
+import { ChevronRight, Save, Upload, FileSymlink, PlusCircle, FileCode } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,6 +27,8 @@ export default function DashboardPage() {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [activeVerificationTab, setActiveVerificationTab] = useState<"verification" | "logic-validation">("verification");
   const [isLoadingAILogic, setIsLoadingAILogic] = useState(false);
+  const [isRunningVerification, setIsRunningVerification] = useState(false);
+  const [isPollingResults, setIsPollingResults] = useState(false);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -86,6 +89,14 @@ export default function DashboardPage() {
       
       if (data && data.length > 0) {
         setVerificationResult(data[0]);
+        
+        // If verification is still running, start polling
+        if (data[0].status === VerificationStatus.RUNNING) {
+          setIsPollingResults(true);
+          startPolling(project_id, data[0].id);
+        } else {
+          setIsPollingResults(false);
+        }
       } else {
         setVerificationResult(undefined);
       }
@@ -94,6 +105,42 @@ export default function DashboardPage() {
       // We don't show a toast here to avoid cluttering the UI
     }
   };
+
+  // Polling function for verification results
+  const startPolling = useCallback((projectId: string, resultId: string) => {
+    const pollingInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('verification_results')
+          .select('*')
+          .eq('id', resultId)
+          .single();
+          
+        if (error) {
+          console.error('Polling error:', error);
+          clearInterval(pollingInterval);
+          setIsPollingResults(false);
+          return;
+        }
+        
+        if (data) {
+          setVerificationResult(data);
+          
+          // If status is no longer running, stop polling
+          if (data.status !== VerificationStatus.RUNNING && data.status !== VerificationStatus.PENDING) {
+            clearInterval(pollingInterval);
+            setIsPollingResults(false);
+          }
+        }
+      } catch (error) {
+        console.error('Error in polling:', error);
+        clearInterval(pollingInterval);
+        setIsPollingResults(false);
+      }
+    }, 3000);
+    
+    return () => clearInterval(pollingInterval);
+  }, []);
 
   const handleSaveCode = async () => {
     if (!activeProject || !user) return;
@@ -316,11 +363,16 @@ export default function DashboardPage() {
     
     await handleFileUploadLogic(file);
     
+    // Clear the input so the same file can be uploaded again
     event.target.value = '';
   };
 
-  const handleStartVerification = async (level: VerificationLevel) => {
+  const handleStartVerification = async (level: string) => {
     await handleSaveCode();
+    
+    if (!activeProject) return;
+    
+    setIsRunningVerification(true);
     
     if (level === VerificationLevel.DEEP) {
       setActiveVerificationTab("logic-validation");
@@ -329,7 +381,11 @@ export default function DashboardPage() {
       // Simulate AI generating logic (in a real app, this would call an API)
       setTimeout(async () => {
         try {
-          if (!activeProject) return;
+          if (!activeProject) {
+            setIsLoadingAILogic(false);
+            setIsRunningVerification(false);
+            return;
+          }
           
           const logicText = `# Auto-generated logic for ${activeProject.name}\n\nThis smart contract appears to be a ${getContractDescription(code)}.\n\nProperties to verify:\n- No integer overflow or underflow\n- No reentrancy vulnerabilities\n- Functions can only be called by authorized roles\n- State changes preserve expected invariants\n\nPlease review and edit these properties to match your verification requirements.`;
           
@@ -357,6 +413,7 @@ export default function DashboardPage() {
         } catch (error) {
           console.error("Error generating logic:", error);
           setIsLoadingAILogic(false);
+          setIsRunningVerification(false);
           toast({
             title: "Error",
             description: "Failed to generate contract logic",
@@ -370,8 +427,114 @@ export default function DashboardPage() {
     
     setActiveVerificationTab("verification");
     
-    if (activeProject) {
-      await fetchLatestVerificationResult(activeProject.id);
+    try {
+      // Create initial verification record
+      const initialResult: Partial<VerificationResult> = {
+        project_id: activeProject.id,
+        level: level as VerificationLevel,
+        status: VerificationStatus.RUNNING,
+        results: [],
+        logs: ["Starting verification process..."],
+        created_at: new Date().toISOString(),
+      };
+      
+      const { data: verificationRecord, error: insertError } = await supabase
+        .from('verification_results')
+        .insert(initialResult)
+        .select()
+        .single();
+        
+      if (insertError) throw insertError;
+      
+      setVerificationResult(verificationRecord);
+      setIsPollingResults(true);
+      
+      // Simulate the verification process
+      setTimeout(async () => {
+        try {
+          // Mock verification issues
+          const mockIssues = [
+            {
+              verification_id: verificationRecord.id,
+              error_type: "Reentrancy",
+              severity: "high" as const,
+              description: "Potential reentrancy vulnerability in transfer function",
+              line_number: 45,
+              column_number: 4,
+              function_name: "transfer",
+              contract_name: activeProject?.name,
+              suggested_fix: "Consider implementing a reentrancy guard or following the checks-effects-interactions pattern",
+              code_snippet: "function transfer(address to, uint256 amount) public { ... }"
+            },
+            {
+              verification_id: verificationRecord.id,
+              error_type: "Arithmetic",
+              severity: "medium" as const,
+              description: "Potential integer overflow in calculateReward function",
+              line_number: 67,
+              column_number: 12,
+              function_name: "calculateReward",
+              contract_name: activeProject?.name,
+              suggested_fix: "Use SafeMath or Solidity 0.8+ for automatic overflow checking",
+              code_snippet: "uint256 reward = amount * rate;"
+            }
+          ];
+          
+          // Insert mock issues
+          await Promise.all(mockIssues.map(issue => 
+            supabase.from('verification_issues').insert(issue)
+          ));
+          
+          // Update the verification result
+          await supabase
+            .from('verification_results')
+            .update({
+              status: VerificationStatus.COMPLETED,
+              completed_at: new Date().toISOString(),
+              results: mockIssues,
+              logs: [
+                "Starting verification process...", 
+                "Analyzing contract structure...", 
+                "Checking for common vulnerabilities...", 
+                "Verification completed with 2 issues found"
+              ]
+            })
+            .eq('id', verificationRecord.id);
+            
+          // Fetch the updated result
+          await fetchLatestVerificationResult(activeProject.id);
+          
+          toast({
+            title: "Verification complete",
+            description: "Contract verification has completed. Check the results for details.",
+          });
+        } catch (error: any) {
+          console.error("Error in verification simulation:", error);
+          
+          // Update status to failed if there's an error
+          await supabase
+            .from('verification_results')
+            .update({
+              status: VerificationStatus.FAILED,
+              completed_at: new Date().toISOString(),
+              error_message: error.message
+            })
+            .eq('id', verificationRecord.id);
+            
+          await fetchLatestVerificationResult(activeProject.id);
+        } finally {
+          setIsRunningVerification(false);
+        }
+      }, 5000);
+      
+    } catch (error: any) {
+      console.error("Error starting verification:", error);
+      setIsRunningVerification(false);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to start verification",
+        variant: "destructive"
+      });
     }
   };
 
@@ -391,15 +554,20 @@ export default function DashboardPage() {
         
       if (error) throw error;
       
+      // Set active tab back to verification
+      setActiveVerificationTab("verification");
+      setIsPollingResults(true);
+      
       // Fetch the updated verification result
       await fetchLatestVerificationResult(activeProject.id);
       
       // Simulate the backend processing (in a real app, this would be done by the backend)
       setTimeout(async () => {
-        if (!verificationResult) return;
-        
-        // Generate mock CVL code
-        const mockCvlCode = `
+        try {
+          if (!verificationResult) return;
+          
+          // Generate mock CVL code
+          const mockCvlCode = `
 /*
  * Generated CVL code for advanced verification
  * Based on user-confirmed logic
@@ -435,66 +603,88 @@ rule preservesTotalSupply(method f) {
 
 // Add more rules based on confirmed logic
 `;
-        
-        // Mock verification issues
-        const mockIssues = [
-          {
-            verification_id: verificationResult.id,
-            error_type: "Reentrancy",
-            severity: "high" as const,
-            description: "Potential reentrancy vulnerability in transfer function",
-            line_number: 45,
-            column_number: 4,
-            function_name: "transfer",
-            contract_name: activeProject?.name,
-            suggested_fix: "Consider implementing a reentrancy guard or following the checks-effects-interactions pattern",
-            code_snippet: "function transfer(address to, uint256 amount) public { ... }"
-          },
-          {
-            verification_id: verificationResult.id,
-            error_type: "Arithmetic",
-            severity: "medium" as const,
-            description: "Potential integer overflow in calculateReward function",
-            line_number: 67,
-            column_number: 12,
-            function_name: "calculateReward",
-            contract_name: activeProject?.name,
-            suggested_fix: "Use SafeMath or Solidity 0.8+ for automatic overflow checking",
-            code_snippet: "uint256 reward = amount * rate;"
-          }
-        ];
-        
-        // Insert mock issues
-        for (const issue of mockIssues) {
-          await supabase.from('verification_issues').insert(issue);
-        }
-        
-        // Update the verification result
-        await supabase
-          .from('verification_results')
-          .update({
-            status: VerificationStatus.COMPLETED,
-            cvl_code: mockCvlCode,
-            spec_used: verificationResult.spec_draft, // Use the spec_draft as the final spec used
-            completed_at: new Date().toISOString(),
-            logs: [...(verificationResult.logs || []), 
-              "Generated CVL code from logic", 
-              "Running Certora Prover...", 
-              "Verification completed with 2 issues found"]
-          })
-          .eq('id', verificationResult.id);
           
-        // Fetch the updated result
-        await fetchLatestVerificationResult(activeProject.id);
-        
-        toast({
-          title: "Verification complete",
-          description: "Advanced verification has completed. Check the results tab for details.",
-        });
+          // Mock verification issues
+          const mockIssues = [
+            {
+              verification_id: verificationResult.id,
+              error_type: "Reentrancy",
+              severity: "high" as const,
+              description: "Potential reentrancy vulnerability in transfer function",
+              line_number: 45,
+              column_number: 4,
+              function_name: "transfer",
+              contract_name: activeProject?.name,
+              suggested_fix: "Consider implementing a reentrancy guard or following the checks-effects-interactions pattern",
+              code_snippet: "function transfer(address to, uint256 amount) public { ... }"
+            },
+            {
+              verification_id: verificationResult.id,
+              error_type: "Arithmetic",
+              severity: "medium" as const,
+              description: "Potential integer overflow in calculateReward function",
+              line_number: 67,
+              column_number: 12,
+              function_name: "calculateReward",
+              contract_name: activeProject?.name,
+              suggested_fix: "Use SafeMath or Solidity 0.8+ for automatic overflow checking",
+              code_snippet: "uint256 reward = amount * rate;"
+            }
+          ];
+          
+          // Insert mock issues
+          for (const issue of mockIssues) {
+            await supabase.from('verification_issues').insert(issue);
+          }
+          
+          // Update the verification result
+          await supabase
+            .from('verification_results')
+            .update({
+              status: VerificationStatus.COMPLETED,
+              cvl_code: mockCvlCode,
+              spec_used: verificationResult.spec_draft, // Use the spec_draft as the final spec used
+              completed_at: new Date().toISOString(),
+              results: mockIssues,
+              logs: [...(verificationResult.logs || []), 
+                "Generated CVL code from logic", 
+                "Running Certora Prover...", 
+                "Verification completed with 2 issues found"]
+            })
+            .eq('id', verificationResult.id);
+            
+          // Fetch the updated result
+          await fetchLatestVerificationResult(activeProject.id);
+          
+          toast({
+            title: "Verification complete",
+            description: "Advanced verification has completed. Check the results tab for details.",
+          });
+        } catch (error: any) {
+          console.error("Error in verification process:", error);
+          
+          // Update status to failed
+          await supabase
+            .from('verification_results')
+            .update({
+              status: VerificationStatus.FAILED,
+              completed_at: new Date().toISOString(),
+              error_message: error.message || "Unknown error during verification"
+            })
+            .eq('id', verificationResult.id);
+            
+          await fetchLatestVerificationResult(activeProject.id);
+          
+          toast({
+            title: "Verification failed",
+            description: error.message || "An error occurred during verification",
+            variant: "destructive"
+          });
+        } finally {
+          setIsRunningVerification(false);
+          setIsPollingResults(false);
+        }
       }, 5000);
-      
-      // Switch to verification tab to show results
-      setActiveVerificationTab("verification");
     } catch (error: any) {
       console.error("Error confirming logic:", error);
       toast({
@@ -506,54 +696,30 @@ rule preservesTotalSupply(method f) {
   };
 
   const handleCancelLogicValidation = async () => {
-    if (verificationResult?.status === VerificationStatus.PENDING) {
-      try {
+    if (!verificationResult) return;
+    
+    try {
+      if (verificationResult.status === VerificationStatus.PENDING) {
         await supabase
           .from('verification_results')
           .delete()
           .eq('id', verificationResult.id);
-        setVerificationResult(undefined);
-      } catch (error) {
-        console.error("Error cancelling verification:", error);
+      } else {
+        await supabase
+          .from('verification_results')
+          .update({
+            status: VerificationStatus.FAILED,
+            completed_at: new Date().toISOString(),
+            error_message: "Verification cancelled by user"
+          })
+          .eq('id', verificationResult.id);
       }
-    }
-    
-    setActiveVerificationTab("verification");
-  };
-
-  const handleStopVerification = async () => {
-    if (!verificationResult || verificationResult.status !== VerificationStatus.RUNNING) return;
-    
-    try {
-      const { error } = await supabase
-        .from('verification_results')
-        .update({
-          status: VerificationStatus.FAILED,
-          completed_at: new Date().toISOString(),
-        })
-        .eq('id', verificationResult.id);
-        
-      if (error) throw error;
       
-      setVerificationResult(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          status: VerificationStatus.FAILED,
-          completed_at: new Date().toISOString(),
-        };
-      });
-      
-      toast({
-        title: "Verification stopped",
-        description: "The verification process has been stopped.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error stopping verification",
-        description: error.message,
-        variant: "destructive",
-      });
+      setVerificationResult(undefined);
+    } catch (error) {
+      console.error("Error cancelling verification:", error);
+    } finally {
+      setActiveVerificationTab("verification");
     }
   };
 
@@ -606,6 +772,13 @@ rule preservesTotalSupply(method f) {
       fetchLatestVerificationResult(activeProject.id);
     }
   }, [activeProject]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      setIsPollingResults(false);
+    };
+  }, []);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -697,25 +870,33 @@ rule preservesTotalSupply(method f) {
             </div>
           }
           verificationContent={
-            <div className="overflow-auto p-4 h-full">
+            <div className="h-full">
               <Tabs
                 value={activeVerificationTab}
                 onValueChange={val => setActiveVerificationTab(val as "verification" | "logic-validation")}
+                className="h-full"
               >
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="verification">Verification</TabsTrigger>
                   <TabsTrigger value="logic-validation">Logic Validation</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="verification" className="h-full">
-                <VerificationPanel
+                <TabsContent value="verification" className="h-[calc(100%-45px)] overflow-hidden">
+                  <VerificationPanel
                     project={activeProject}
-                    onNavigateToLine={handleNavigateToLine} onStartVerification={function (level: string): Promise<void> {
-                      throw new Error("Function not implemented.");
-                    } } isRunningVerification={false} isLoadingAILogic={false} isPollingResults={false}                  />
+                    activeTab={verificationLevel}
+                    onNavigateToLine={handleNavigateToLine}
+                    onStartVerification={handleStartVerification}
+                    onCancelLogicValidation={handleCancelLogicValidation}
+                    onConfirmLogicVerification={handleConfirmLogic}
+                    verificationResult={verificationResult}
+                    isRunningVerification={isRunningVerification}
+                    isLoadingAILogic={isLoadingAILogic}
+                    isPollingResults={isPollingResults}
+                  />
                 </TabsContent>
 
-                <TabsContent value="logic-validation" className="h-full">
+                <TabsContent value="logic-validation" className="h-[calc(100%-45px)] overflow-hidden">
                   <LogicValidation
                     project_id={activeProject?.id || ''}
                     code={code}
@@ -784,6 +965,9 @@ rule preservesTotalSupply(method f) {
       </div>
     );
   };
+
+  // Create verification level state
+  const [verificationLevel, setVerificationLevel] = useState<string>("simple");
 
   return (
     <div className="flex h-screen flex-col">
