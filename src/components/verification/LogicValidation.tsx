@@ -3,7 +3,7 @@ import { VerificationLevel, VerificationResult, VerificationStatus } from "@/typ
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, CheckCircle, Shield, Edit2, X } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
 import { useToast } from "@/hooks/use-toast";
@@ -32,10 +32,12 @@ export function LogicValidation({
   const { toast } = useToast();
   const isDark = theme === "dark";
   
-  // Initialize the logic text when result changes
+  // Initialize the logic text when result changes or component mounts
   useEffect(() => {
     if (result && result.spec_draft) {
       setLogicText(result.spec_draft);
+      // If we have spec_draft, make the overlay transparent initially
+      if (!isEditing) setShowOverlay(true);
     }
   }, [result]);
   

@@ -6,6 +6,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
+import { useState } from "react";
 
 interface VerificationConnectionErrorProps {
   apiUrl?: string;
@@ -13,6 +14,31 @@ interface VerificationConnectionErrorProps {
 }
 
 export function VerificationConnectionError({ apiUrl, onRetry }: VerificationConnectionErrorProps) {
+  const [isChecking, setIsChecking] = useState(false);
+  
+  // Function to test the connection explicitly
+  const testConnection = async () => {
+    setIsChecking(true);
+    try {
+      // Attempt to connect to the API
+      const response = await fetch(`${apiUrl}/ping`, { 
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store'
+      });
+      
+      const data = await response.json();
+      console.log("API Connection test result:", data);
+      
+      // If we get here, the connection is successful, so trigger the retry
+      onRetry();
+    } catch (error) {
+      console.error("Connection test failed:", error);
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <Alert variant="destructive">
@@ -42,10 +68,26 @@ export function VerificationConnectionError({ apiUrl, onRetry }: VerificationCon
             </ul>
           </li>
           <li>Check network logs in the browser console for more details on any connection errors</li>
+          <li>Ensure your .env file has the correct VITE_API_URL value</li>
         </ol>
       </div>
       
       <div className="flex justify-center">
+        <Button 
+          onClick={testConnection} 
+          disabled={isChecking}
+          className="mt-4 mr-2"
+        >
+          {isChecking ? (
+            <>
+              <span className="animate-spin mr-2">⟳</span> 
+              Testing Connection...
+            </>
+          ) : (
+            'Test Connection'
+          )}
+        </Button>
+        
         <Button onClick={onRetry} className="mt-4">
           Retry Connection
         </Button>

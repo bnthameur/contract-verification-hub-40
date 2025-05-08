@@ -560,7 +560,7 @@ const handleConfirmLogic = async (logicText: string) => {
     setActiveVerificationTab("verification");
     setIsPollingResults(true);
     
-    // Changed from /verify_with_logic to /verify/confirm/{id} to match backend
+    // Fix: Send logicText as a string in the request body, not as a JSON object
     const response = await fetch(`${apiUrl}/verify/confirm/${verificationResult.id}`, {
       method: 'POST',
       headers: {
@@ -609,308 +609,308 @@ const handleConfirmLogic = async (logicText: string) => {
   }
 };
 
-  const handleCancelLogicValidation = async () => {
-    if (!verificationResult) return;
-    
-    try {
-      if (verificationResult.status === VerificationStatus.PENDING) {
-        await supabase
-          .from('verification_results')
-          .delete()
-          .eq('id', verificationResult.id);
-      } else {
-        await supabase
-          .from('verification_results')
-          .update({
-            status: VerificationStatus.FAILED,
-            completed_at: new Date().toISOString(),
-            error_message: "Verification cancelled by user"
-          })
-          .eq('id', verificationResult.id);
-      }
-      
-      setVerificationResult(undefined);
-    } catch (error) {
-      console.error("Error cancelling verification:", error);
-    } finally {
-      setActiveVerificationTab("verification");
-    }
-  };
-
-  const handleNavigateToLine = (lineNumber: number) => {
-    if (!editorRef.current) return;
-    
-    editorRef.current.revealLineInCenter(lineNumber);
-    
-    editorRef.current.setPosition({ lineNumber, column: 1 });
-    
-    const decorations = editorRef.current.createDecorationsCollection([
-      { 
-        range: new monaco.Range(lineNumber, 1, lineNumber, 1),
-        options: { 
-          isWholeLine: true,
-          className: 'bg-primary/20',
-          glyphMarginClassName: 'bg-primary/40'
-        }
-      }
-    ]);
-    
-    editorRef.current.focus();
-    
-    setTimeout(() => {
-      decorations.clear();
-    }, 3000);
-  };
-
-  const handleEditorMount = (editor: monaco.editor.IStandaloneCodeEditor) => {
-    editorRef.current = editor;
-  };
-
-  const getContractDescription = (code: string): string => {
-    if (code.includes("ERC20") || code.includes("balanceOf") || code.includes("transfer(")) {
-      return "token contract with ERC20-like functionality";
-    } else if (code.includes("ERC721") || code.includes("ownerOf") || code.includes("transferFrom(")) {
-      return "NFT contract with ERC721-like functionality";
-    } else if (code.includes("payable") || code.includes("msg.value")) {
-      return "payment-handling contract";
-    } else if (code.includes("owner") || code.includes("onlyOwner")) {
-      return "contract with ownership controls";
+const handleCancelLogicValidation = async () => {
+  if (!verificationResult) return;
+  
+  try {
+    if (verificationResult.status === VerificationStatus.PENDING) {
+      await supabase
+        .from('verification_results')
+        .delete()
+        .eq('id', verificationResult.id);
     } else {
-      return "basic contract";
+      await supabase
+        .from('verification_results')
+        .update({
+          status: VerificationStatus.FAILED,
+          completed_at: new Date().toISOString(),
+          error_message: "Verification cancelled by user"
+        })
+        .eq('id', verificationResult.id);
     }
-  };
+    
+    setVerificationResult(undefined);
+  } catch (error) {
+    console.error("Error cancelling verification:", error);
+  } finally {
+    setActiveVerificationTab("verification");
+  }
+};
 
-  useEffect(() => {
-    if (activeProject) {
-      setCode(activeProject.code);
-      fetchLatestVerificationResult(activeProject.id);
+const handleNavigateToLine = (lineNumber: number) => {
+  if (!editorRef.current) return;
+  
+  editorRef.current.revealLineInCenter(lineNumber);
+  
+  editorRef.current.setPosition({ lineNumber, column: 1 });
+  
+  const decorations = editorRef.current.createDecorationsCollection([
+    { 
+      range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+      options: { 
+        isWholeLine: true,
+        className: 'bg-primary/20',
+        glyphMarginClassName: 'bg-primary/40'
+      }
     }
-  }, [activeProject]);
+  ]);
+  
+  editorRef.current.focus();
+  
+  setTimeout(() => {
+    decorations.clear();
+  }, 3000);
+};
 
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      setIsPollingResults(false);
-    };
-  }, []);
+const handleEditorMount = (editor: monaco.editor.IStandaloneCodeEditor) => {
+  editorRef.current = editor;
+};
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(true);
+const getContractDescription = (code: string): string => {
+  if (code.includes("ERC20") || code.includes("balanceOf") || code.includes("transfer(")) {
+    return "token contract with ERC20-like functionality";
+  } else if (code.includes("ERC721") || code.includes("ownerOf") || code.includes("transferFrom(")) {
+    return "NFT contract with ERC721-like functionality";
+  } else if (code.includes("payable") || code.includes("msg.value")) {
+    return "payment-handling contract";
+  } else if (code.includes("owner") || code.includes("onlyOwner")) {
+    return "contract with ownership controls";
+  } else {
+    return "basic contract";
+  }
+};
+
+useEffect(() => {
+  if (activeProject) {
+    setCode(activeProject.code);
+    fetchLatestVerificationResult(activeProject.id);
+  }
+}, [activeProject]);
+
+// Cleanup polling on unmount
+useEffect(() => {
+  return () => {
+    setIsPollingResults(false);
   };
+}, []);
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
+const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+  e.preventDefault();
+  setIsDragging(true);
+};
 
-  const renderProjectContent = () => {
-    return (
-      <>
-        <ResizableLayout
-          sidebarContent={
-            <Sidebar
-              projects={projects}
-              activeProject={activeProject}
-              onSelectProject={setActiveProject}
-              onCreateProject={() => setIsCreatingProject(true)}
-              onRefreshProjects={fetchProjects}
-            />
-          }
-          mainContent={
-            <div className="flex flex-col h-full">
-              <div className="border-b px-6 py-3 flex items-center justify-between bg-card/50">
-                <div className="flex items-center gap-1">
-                  <span className="text-muted-foreground text-sm">Project</span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium text-sm">{activeProject?.name}</span>
-                </div>
+const handleDragLeave = () => {
+  setIsDragging(false);
+};
 
-                <div className="flex items-center gap-4">
-                  <div className="text-xs text-muted-foreground">
-                    Last saved: {activeProject ? new Date(activeProject.updated_at).toLocaleString() : ''}
-                  </div>
-                  <Button size="sm" onClick={handleSaveCode} className="gap-1.5">
-                    <Save className="h-4 w-4" />
-                    Save
-                  </Button>
-                </div>
+const renderProjectContent = () => {
+  return (
+    <>
+      <ResizableLayout
+        sidebarContent={
+          <Sidebar
+            projects={projects}
+            activeProject={activeProject}
+            onSelectProject={setActiveProject}
+            onCreateProject={() => setIsCreatingProject(true)}
+            onRefreshProjects={fetchProjects}
+          />
+        }
+        mainContent={
+          <div className="flex flex-col h-full">
+            <div className="border-b px-6 py-3 flex items-center justify-between bg-card/50">
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground text-sm">Project</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium text-sm">{activeProject?.name}</span>
               </div>
 
-              <div className="flex flex-col h-full">
-                <Tabs defaultValue="code" className="flex-1 flex flex-col">
-                  <TabsList className="mx-4 mt-2">
-                    <TabsTrigger value="code">Code</TabsTrigger>
-                    <TabsTrigger value="tests">Tests</TabsTrigger>
-                    <TabsTrigger value="deployment" disabled>Deployment</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="code" className="flex-1 p-0 overflow-hidden">
-                    <MonacoEditor 
-                      value={code} 
-                      onChange={setCode} 
-                      onEditorMount={handleEditorMount}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="tests" className="flex-1 p-0 overflow-hidden">
-                    {verificationResult?.cvl_code ? (
-                      <MonacoEditor 
-                        value={verificationResult.cvl_code}
-                        onChange={() => {}}
-                        options={{
-                          readOnly: true,
-                          language: 'plaintext',
-                        }}
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="text-center p-6">
-                          <h3 className="text-lg font-medium mb-2">No CVL code available</h3>
-                          <p className="text-muted-foreground mb-4">
-                            Run an advanced verification to generate CVL code
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </TabsContent>
-
-                  <TabsContent value="deployment" className="flex-1 p-0 overflow-hidden">
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      Deployment features coming soon.
-                    </div>
-                  </TabsContent>
-                </Tabs>
+              <div className="flex items-center gap-4">
+                <div className="text-xs text-muted-foreground">
+                  Last saved: {activeProject ? new Date(activeProject.updated_at).toLocaleString() : ''}
+                </div>
+                <Button size="sm" onClick={handleSaveCode} className="gap-1.5">
+                  <Save className="h-4 w-4" />
+                  Save
+                </Button>
               </div>
             </div>
-          }
-          verificationContent={
-            <div className="h-full">
-              <Tabs
-                value={activeVerificationTab}
-                onValueChange={(val) => {
-                  // Only allow switching to logic-validation if we're in the right state
-                  if (val === "logic-validation" && 
-                      !(verificationResult?.status === VerificationStatus.PENDING || 
-                        verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION)) {
-                    return;
-                  }
-                  setActiveVerificationTab(val as "verification" | "logic-validation");
-                }}
-                className="h-full"
-              >
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="verification">Verification</TabsTrigger>
-                  <TabsTrigger value="logic-validation" disabled={
-                    !(verificationResult?.status === VerificationStatus.PENDING || 
-                      verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION)
-                  }>
-                    Logic Validation
-                  </TabsTrigger>
+
+            <div className="flex flex-col h-full">
+              <Tabs defaultValue="code" className="flex-1 flex flex-col">
+                <TabsList className="mx-4 mt-2">
+                  <TabsTrigger value="code">Code</TabsTrigger>
+                  <TabsTrigger value="tests">Tests</TabsTrigger>
+                  <TabsTrigger value="deployment" disabled>Deployment</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="verification" className="h-[calc(100%-45px)] overflow-hidden">
-                  <VerificationPanel
-                    project={activeProject}
-                    activeTab={verificationLevel}
-                    onNavigateToLine={handleNavigateToLine}
-                    onStartVerification={handleStartVerification}
-                    onCancelLogicValidation={handleCancelLogicValidation}
-                    onConfirmLogicVerification={handleConfirmLogic}
-                    verificationResult={verificationResult}
-                    isRunningVerification={isRunningVerification}
-                    isLoadingAILogic={isLoadingAILogic}
-                    isPollingResults={isPollingResults}
+                <TabsContent value="code" className="flex-1 p-0 overflow-hidden">
+                  <MonacoEditor 
+                    value={code} 
+                    onChange={setCode} 
+                    onEditorMount={handleEditorMount}
                   />
                 </TabsContent>
 
-                <TabsContent value="logic-validation" className="h-[calc(100%-45px)] overflow-hidden">
-                  <LogicValidation
-                    project_id={activeProject?.id || ''}
-                    code={code}
-                    result={verificationResult}
-                    onConfirmLogic={handleConfirmLogic}
-                    onCancel={handleCancelLogicValidation}
-                    isLoadingAILogic={isLoadingAILogic}
-                  />
+                <TabsContent value="tests" className="flex-1 p-0 overflow-hidden">
+                  {verificationResult?.cvl_code ? (
+                    <MonacoEditor 
+                      value={verificationResult.cvl_code}
+                      onChange={() => {}}
+                      options={{
+                        readOnly: true,
+                        language: 'plaintext',
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center p-6">
+                        <h3 className="text-lg font-medium mb-2">No CVL code available</h3>
+                        <p className="text-muted-foreground mb-4">
+                          Run an advanced verification to generate CVL code
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="deployment" className="flex-1 p-0 overflow-hidden">
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    Deployment features coming soon.
+                  </div>
                 </TabsContent>
               </Tabs>
             </div>
-          }
-        />
-      </>
-    );
-  };
-
-  const renderWelcomeScreen = () => {
-    return (
-      <div 
-        className="flex-1 flex items-center justify-center"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        <div className={`text-center max-w-md p-6 transition-all ${isDragging ? 'scale-105 opacity-70' : ''}`}>
-          <h2 className="text-2xl font-semibold mb-4">Welcome to FormalBase</h2>
-          <p className="text-muted-foreground mb-8">
-            Start by creating a new project or importing a Solidity file
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button 
-              onClick={() => setIsCreatingProject(true)}
-              className="w-full flex items-center justify-center gap-2 p-6 h-auto flex-col"
-              variant="outline"
-            >
-              <FileCode className="h-10 w-10 mb-2 text-primary" />
-              <span>Create New Project</span>
-            </Button>
-            
-            <label>
-              <input
-                type="file"
-                accept=".sol"
-                onChange={handleFileUpload}
-                disabled={isUploading}
-                className="hidden"
-              />
-              <div className={`w-full flex items-center justify-center gap-2 p-6 h-full flex-col cursor-pointer border rounded-md ${isUploading ? 'opacity-70' : 'hover:border-primary hover:text-primary transition-colors'}`}>
-                <Upload className="h-10 w-10 mb-2 text-primary" />
-                <span>{isUploading ? 'Uploading...' : 'Upload Solidity File'}</span>
-              </div>
-            </label>
           </div>
-          
-          {isDragging && (
-            <div className="absolute inset-0 border-2 border-dashed border-primary bg-primary/5 flex items-center justify-center rounded-lg z-10">
-              <div className="text-center">
-                <FileSymlink className="h-16 w-16 mx-auto mb-4 text-primary" />
-                <h3 className="text-xl font-medium">Drop your Solidity file here</h3>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
+        }
+        verificationContent={
+          <div className="h-full">
+            <Tabs
+              value={activeVerificationTab}
+              onValueChange={(val) => {
+                // Only allow switching to logic-validation if we're in the right state
+                if (val === "logic-validation" && 
+                    !(verificationResult?.status === VerificationStatus.PENDING || 
+                      verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION)) {
+                  return;
+                }
+                setActiveVerificationTab(val as "verification" | "logic-validation");
+              }}
+              className="h-full"
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="verification">Verification</TabsTrigger>
+                <TabsTrigger value="logic-validation" disabled={
+                  !(verificationResult?.status === VerificationStatus.PENDING || 
+                    verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION)
+                }>
+                  Logic Validation
+                </TabsTrigger>
+              </TabsList>
 
-  // Create verification level state
-  const [verificationLevel, setVerificationLevel] = useState<string>("simple");
+              <TabsContent value="verification" className="h-[calc(100%-45px)] overflow-hidden">
+                <VerificationPanel
+                  project={activeProject}
+                  activeTab={verificationLevel}
+                  onNavigateToLine={handleNavigateToLine}
+                  onStartVerification={handleStartVerification}
+                  onCancelLogicValidation={handleCancelLogicValidation}
+                  onConfirmLogicVerification={handleConfirmLogic}
+                  verificationResult={verificationResult}
+                  isRunningVerification={isRunningVerification}
+                  isLoadingAILogic={isLoadingAILogic}
+                  isPollingResults={isPollingResults}
+                />
+              </TabsContent>
 
-  return (
-    <div className="flex h-screen flex-col">
-      <LightRay />
-      <Navbar hideUser />
-
-      <div className="flex flex-1 overflow-hidden">
-        {activeProject ? renderProjectContent() : renderWelcomeScreen()}
-      </div>
-
-      <ProjectCreationDialog
-        open={isCreatingProject}
-        onOpenChange={setIsCreatingProject}
-        onCreateProject={handleCreateProject}
-        onFileUpload={handleFileUploadLogic}
+              <TabsContent value="logic-validation" className="h-[calc(100%-45px)] overflow-hidden">
+                <LogicValidation
+                  project_id={activeProject?.id || ''}
+                  code={code}
+                  result={verificationResult}
+                  onConfirmLogic={handleConfirmLogic}
+                  onCancel={handleCancelLogicValidation}
+                  isLoadingAILogic={isLoadingAILogic}
+                />
+              </TabsContent>
+            </Tabs>
+          </div>
+        }
       />
+    </>
+  );
+};
+
+const renderWelcomeScreen = () => {
+  return (
+    <div 
+      className="flex-1 flex items-center justify-center"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div className={`text-center max-w-md p-6 transition-all ${isDragging ? 'scale-105 opacity-70' : ''}`}>
+        <h2 className="text-2xl font-semibold mb-4">Welcome to FormalBase</h2>
+        <p className="text-muted-foreground mb-8">
+          Start by creating a new project or importing a Solidity file
+        </p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Button 
+            onClick={() => setIsCreatingProject(true)}
+            className="w-full flex items-center justify-center gap-2 p-6 h-auto flex-col"
+            variant="outline"
+          >
+            <FileCode className="h-10 w-10 mb-2 text-primary" />
+            <span>Create New Project</span>
+          </Button>
+          
+          <label>
+            <input
+              type="file"
+              accept=".sol"
+              onChange={handleFileUpload}
+              disabled={isUploading}
+              className="hidden"
+            />
+            <div className={`w-full flex items-center justify-center gap-2 p-6 h-full flex-col cursor-pointer border rounded-md ${isUploading ? 'opacity-70' : 'hover:border-primary hover:text-primary transition-colors'}`}>
+              <Upload className="h-10 w-10 mb-2 text-primary" />
+              <span>{isUploading ? 'Uploading...' : 'Upload Solidity File'}</span>
+            </div>
+          </label>
+        </div>
+        
+        {isDragging && (
+          <div className="absolute inset-0 border-2 border-dashed border-primary bg-primary/5 flex items-center justify-center rounded-lg z-10">
+            <div className="text-center">
+              <FileSymlink className="h-16 w-16 mx-auto mb-4 text-primary" />
+              <h3 className="text-xl font-medium">Drop your Solidity file here</h3>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
+};
+
+// Create verification level state
+const [verificationLevel, setVerificationLevel] = useState<string>("simple");
+
+return (
+  <div className="flex h-screen flex-col">
+    <LightRay />
+    <Navbar hideUser />
+
+    <div className="flex flex-1 overflow-hidden">
+      {activeProject ? renderProjectContent() : renderWelcomeScreen()}
+    </div>
+
+    <ProjectCreationDialog
+      open={isCreatingProject}
+      onOpenChange={setIsCreatingProject}
+      onCreateProject={handleCreateProject}
+      onFileUpload={handleFileUploadLogic}
+    />
+  </div>
+);
 }
