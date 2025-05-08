@@ -556,23 +556,21 @@ const handleConfirmLogic = async (logicText: string) => {
       
     if (error) throw error;
     
-    // Set active tab back to verification
-    setActiveVerificationTab("verification");
     setIsPollingResults(true);
     
-    // Fix: Send logicText as a string in the request body, not as a JSON object
+    // Send the logicText as a plain string, not wrapped in an object
     const response = await fetch(`${apiUrl}/verify/confirm/${verificationResult.id}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(logicText),
+      body: JSON.stringify(logicText), // Send the text directly as a string in JSON
     });
     
     if (!response.ok) {
       const errorText = await response.text();
       console.error("API error:", errorText);
-      throw new Error(`API request failed: ${response.statusText}`);
+      throw new Error(`API request failed: ${response.statusText} (${response.status})`);
     }
     
     const responseData = await response.json();
@@ -785,55 +783,18 @@ const renderProjectContent = () => {
         }
         verificationContent={
           <div className="h-full">
-            <Tabs
-              value={activeVerificationTab}
-              onValueChange={(val) => {
-                // Only allow switching to logic-validation if we're in the right state
-                if (val === "logic-validation" && 
-                    !(verificationResult?.status === VerificationStatus.PENDING || 
-                      verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION)) {
-                  return;
-                }
-                setActiveVerificationTab(val as "verification" | "logic-validation");
-              }}
-              className="h-full"
-            >
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="verification">Verification</TabsTrigger>
-                <TabsTrigger value="logic-validation" disabled={
-                  !(verificationResult?.status === VerificationStatus.PENDING || 
-                    verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION)
-                }>
-                  Logic Validation
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="verification" className="h-[calc(100%-45px)] overflow-hidden">
-                <VerificationPanel
-                  project={activeProject}
-                  activeTab={verificationLevel}
-                  onNavigateToLine={handleNavigateToLine}
-                  onStartVerification={handleStartVerification}
-                  onCancelLogicValidation={handleCancelLogicValidation}
-                  onConfirmLogicVerification={handleConfirmLogic}
-                  verificationResult={verificationResult}
-                  isRunningVerification={isRunningVerification}
-                  isLoadingAILogic={isLoadingAILogic}
-                  isPollingResults={isPollingResults}
-                />
-              </TabsContent>
-
-              <TabsContent value="logic-validation" className="h-[calc(100%-45px)] overflow-hidden">
-                <LogicValidation
-                  project_id={activeProject?.id || ''}
-                  code={code}
-                  result={verificationResult}
-                  onConfirmLogic={handleConfirmLogic}
-                  onCancel={handleCancelLogicValidation}
-                  isLoadingAILogic={isLoadingAILogic}
-                />
-              </TabsContent>
-            </Tabs>
+            <VerificationPanel
+              project={activeProject}
+              activeTab={verificationLevel}
+              onNavigateToLine={handleNavigateToLine}
+              onStartVerification={handleStartVerification}
+              onCancelLogicValidation={handleCancelLogicValidation}
+              onConfirmLogicVerification={handleConfirmLogic}
+              verificationResult={verificationResult}
+              isRunningVerification={isRunningVerification}
+              isLoadingAILogic={isLoadingAILogic}
+              isPollingResults={isPollingResults}
+            />
           </div>
         }
       />

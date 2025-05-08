@@ -24,6 +24,12 @@ const handleError = (event: Event | ErrorEvent | PromiseRejectionEvent) => {
     if (error?.message?.includes('API request failed')) {
       console.error('API Error Details:', error);
     }
+
+    // Log unprocessable entity errors specifically
+    if (error?.message?.includes('Unprocessable Entity')) {
+      console.error('Unprocessable Entity Error Details:', error);
+      console.error('This often happens when the request body format is incorrect');
+    }
   }
 };
 

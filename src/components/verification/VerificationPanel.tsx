@@ -1,3 +1,4 @@
+
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { VerificationIssuesList } from "@/components/verification/VerificationIssuesList";
@@ -17,12 +18,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import {
   Alert,
   AlertDescription,
@@ -165,7 +160,7 @@ export function VerificationPanel({
   // Tab state for completed verification views
   const [activeResultTab, setActiveResultTab] = useState<string>("issues");
 
-  // Automatically switch to logic validation tab when spec_draft is available
+  // Automatically switch to logic validation when spec_draft is available
   useEffect(() => {
     if (verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION && 
         verificationResult?.spec_draft) {

@@ -85,7 +85,7 @@ export function LogicValidation({
         <h3 className="text-xl font-medium mb-2">Verification In Progress</h3>
         <p className="text-muted-foreground text-center max-w-md">
           The formal verification is now running with your confirmed logic.
-          You can view progress in the Verification tab.
+          Results will appear automatically when complete.
         </p>
       </div>
     );

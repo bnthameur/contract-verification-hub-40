@@ -1,6 +1,6 @@
 
 import { Button } from "@/components/ui/button";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, ExternalLink } from "lucide-react";
 import {
   Alert,
   AlertDescription,
@@ -15,25 +15,39 @@ interface VerificationConnectionErrorProps {
 
 export function VerificationConnectionError({ apiUrl, onRetry }: VerificationConnectionErrorProps) {
   const [isChecking, setIsChecking] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
   
   // Function to test the connection explicitly
   const testConnection = async () => {
     setIsChecking(true);
+    setLastError(null);
+    
     try {
       // Attempt to connect to the API
       const response = await fetch(`${apiUrl}/ping`, { 
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store'
+        cache: 'no-store',
+        mode: 'cors'
       });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API returned status ${response.status}: ${errorText}`);
+      }
       
       const data = await response.json();
       console.log("API Connection test result:", data);
+      
+      if (!data || data.status !== "ok") {
+        throw new Error(`API returned unexpected response: ${JSON.stringify(data)}`);
+      }
       
       // If we get here, the connection is successful, so trigger the retry
       onRetry();
     } catch (error) {
       console.error("Connection test failed:", error);
+      setLastError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsChecking(false);
     }
@@ -71,6 +85,14 @@ export function VerificationConnectionError({ apiUrl, onRetry }: VerificationCon
           <li>Ensure your .env file has the correct VITE_API_URL value</li>
         </ol>
       </div>
+      
+      {lastError && (
+        <Alert variant="destructive" className="mt-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Last Connection Error</AlertTitle>
+          <AlertDescription className="font-mono text-xs break-all">{lastError}</AlertDescription>
+        </Alert>
+      )}
       
       <div className="flex justify-center">
         <Button 
