@@ -17,9 +17,10 @@ export function VerificationConnectionError({ apiUrl, onRetry }: VerificationCon
         <AlertDescription>
           <p className="mb-2">We're having trouble connecting to our backend verification services.</p>
           <ul className="list-disc list-inside text-sm">
-            <li>Check if API URL is correctly configured: {apiUrl || "Not set"}</li>
-            <li>Ensure your internet connection is stable</li>
-            <li>The verification service may be temporarily unavailable</li>
+            <li>API URL is configured as: <span className="font-mono">{apiUrl || "Not set"}</span></li>
+            <li>Make sure your backend server is running at this address</li>
+            <li>Check if the /ping endpoint is implemented on your backend server</li>
+            <li>Ensure CORS is properly configured on your backend</li>
           </ul>
         </AlertDescription>
       </Alert>

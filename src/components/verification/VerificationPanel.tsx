@@ -86,31 +86,37 @@ export function VerificationPanel({
         
         // Now check if the API backend is accessible using the correct endpoint
         try {
+          console.log("Checking backend connection at:", apiUrl);
           const response = await fetch(`${apiUrl}/ping`, { 
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
-            // Adding cache control to prevent caching issues during polling
-            cache: 'no-store'
+            cache: 'no-store',
+            mode: 'cors'
           });
           
-          // Changed condition to use 4xx or 5xx status as a failure indicator
           if (!response.ok) {
             console.error("Backend API not accessible:", await response.text());
             setBackendConnected(false);
             return;
           }
           
-          const data = await response.json();
-          
-          // Validate the response has the expected format
-          if (!data || data.status !== "ok") {
-            console.error("Backend API returned unexpected response:", data);
+          try {
+            const data = await response.json();
+            
+            // Validate the response has the expected format
+            if (!data || data.status !== "ok") {
+              console.error("Backend API returned unexpected response:", data);
+              setBackendConnected(false);
+              return;
+            }
+            
+            // If both checks pass, backend is connected
+            console.log("Backend connection successful:", data);
+            setBackendConnected(!error);
+          } catch (jsonError) {
+            console.error("Error parsing JSON response:", jsonError);
             setBackendConnected(false);
-            return;
           }
-          
-          // If both checks pass, backend is connected
-          setBackendConnected(!error);
         } catch (apiError) {
           console.error("Error connecting to API backend:", apiError);
           setBackendConnected(false);
@@ -224,7 +230,10 @@ export function VerificationPanel({
     // Show failed state
     if (isFailed) {
       return (
-        <VerificationFailed onRetry={() => setShowNewVerification(true)} />
+        <VerificationFailed 
+          onRetry={() => setShowNewVerification(true)}
+          errorMessage={verificationResult?.error_message}
+        />
       );
     }
     
