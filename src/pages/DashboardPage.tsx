@@ -635,6 +635,51 @@ const handleCancelLogicValidation = async () => {
   }
 };
 
+const handleCancelVerification = async (verificationId: string) => {
+  if (!verificationId) return;
+  
+  try {
+    console.log(`Cancelling verification with ID: ${verificationId}`);
+    
+    // Update the verification result status in database
+    const { error } = await supabase
+      .from('verification_results')
+      .update({
+        status: VerificationStatus.FAILED,
+        completed_at: new Date().toISOString(),
+        error_message: "Verification cancelled by user"
+      })
+      .eq('id', verificationId);
+      
+    if (error) {
+      console.error("Error cancelling verification:", error);
+      throw error;
+    }
+    
+    // Stop polling and reset loading states
+    setIsRunningVerification(false);
+    setIsPollingResults(false);
+    setIsLoadingAILogic(false);
+    
+    // Refetch the updated verification result
+    if (activeProject) {
+      fetchLatestVerificationResult(activeProject.id);
+    }
+    
+    toast({
+      title: "Verification Stopped",
+      description: "The verification process has been cancelled."
+    });
+  } catch (error) {
+    console.error("Error cancelling verification:", error);
+    toast({
+      title: "Error",
+      description: "Failed to cancel the verification process.",
+      variant: "destructive"
+    });
+  }
+};
+
 const handleNavigateToLine = (lineNumber: number) => {
   if (!editorRef.current) return;
   
@@ -790,6 +835,7 @@ const renderProjectContent = () => {
               onStartVerification={handleStartVerification}
               onCancelLogicValidation={handleCancelLogicValidation}
               onConfirmLogicVerification={handleConfirmLogic}
+              onCancelVerification={handleCancelVerification}
               verificationResult={verificationResult}
               isRunningVerification={isRunningVerification}
               isLoadingAILogic={isLoadingAILogic}

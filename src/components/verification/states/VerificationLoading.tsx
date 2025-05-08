@@ -1,6 +1,7 @@
 
-import { Loader2 } from "lucide-react";
+import { Loader2, Ban } from "lucide-react";
 import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
 
 // Loading messages that will rotate during verification process
 const loadingMessages = {
@@ -29,11 +30,13 @@ const loadingMessages = {
 
 interface VerificationLoadingProps {
   verificationLevel: string;
+  onCancel?: () => void;
 }
 
-export function VerificationLoading({ verificationLevel }: VerificationLoadingProps) {
+export function VerificationLoading({ verificationLevel, onCancel }: VerificationLoadingProps) {
   const [messageIndex, setMessageIndex] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState<string>("");
+  const [isCancelling, setIsCancelling] = useState(false);
   
   // Effect to handle rotating loading messages
   useEffect(() => {
@@ -58,6 +61,14 @@ export function VerificationLoading({ verificationLevel }: VerificationLoadingPr
     }
   }, [messageIndex, verificationLevel]);
 
+  const handleCancel = async () => {
+    if (!onCancel) return;
+    
+    setIsCancelling(true);
+    await onCancel();
+    setIsCancelling(false);
+  };
+
   return (
     <div className="flex flex-col items-center justify-center h-full p-6">
       <div className="relative">
@@ -70,9 +81,20 @@ export function VerificationLoading({ verificationLevel }: VerificationLoadingPr
       <p className="text-muted-foreground text-center max-w-md mb-4 animate-fade-in transition-all">
         {loadingMessage}
       </p>
-      <div className="w-48 h-1 bg-muted rounded-full overflow-hidden mt-2">
+      <div className="w-48 h-1 bg-muted rounded-full overflow-hidden mt-2 mb-6">
         <div className="h-full bg-primary animate-pulse" style={{ width: '60%' }}></div>
       </div>
+      
+      <Button 
+        variant="destructive" 
+        size="sm"
+        disabled={isCancelling}
+        onClick={handleCancel}
+        className="flex items-center gap-1.5"
+      >
+        <Ban className="h-4 w-4" />
+        {isCancelling ? "Stopping..." : "Stop Verification"}
+      </Button>
     </div>
   );
 }

@@ -1,4 +1,3 @@
-
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { VerificationIssuesList } from "@/components/verification/VerificationIssuesList";
@@ -8,7 +7,7 @@ import { useState, useEffect } from "react";
 import { LogicValidation } from "@/components/verification/LogicValidation";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ShieldAlert, ShieldCheck, History, ChevronDown, AlertCircle, RefreshCw } from "lucide-react";
+import { Loader2, ShieldAlert, ShieldCheck, History, ChevronDown, AlertCircle, RefreshCw, Ban } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   Select,
@@ -40,6 +39,7 @@ interface VerificationPanelProps {
   onStartVerification: (level: string) => Promise<void>;
   onCancelLogicValidation?: () => void;
   onConfirmLogicVerification?: (logicText: string) => Promise<void>;
+  onCancelVerification?: (verificationId: string) => Promise<void>;
   verificationResult?: VerificationResult;
   isRunningVerification: boolean;
   isLoadingAILogic: boolean;
@@ -54,6 +54,7 @@ export function VerificationPanel({
   onStartVerification,
   onCancelLogicValidation,
   onConfirmLogicVerification,
+  onCancelVerification,
   verificationResult,
   isRunningVerification,
   isLoadingAILogic,
@@ -157,6 +158,24 @@ export function VerificationPanel({
     }
   };
 
+  const handleCancelVerification = async () => {
+    if (!verificationResult || !onCancelVerification) return;
+    
+    try {
+      await onCancelVerification(verificationResult.id);
+      toast({
+        title: "Verification cancelled",
+        description: "The verification process has been stopped.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to cancel verification process.",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Tab state for completed verification views
   const [activeResultTab, setActiveResultTab] = useState<string>("issues");
 
@@ -184,6 +203,7 @@ export function VerificationPanel({
       return (
         <VerificationLoading
           verificationLevel={verificationLevel}
+          onCancel={handleCancelVerification}
         />
       );
     }
