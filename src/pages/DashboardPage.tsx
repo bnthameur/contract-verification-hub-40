@@ -414,15 +414,14 @@ const handleStartVerification = async (level: string) => {
       setVerificationResult(verificationRecord);
       
       // Now make actual API call to backend
-      const response = await fetch(`${apiUrl}/generate_logic`, {
+      // Changed from /generate_logic to /verify/deep to match backend
+      const response = await fetch(`${apiUrl}/verify/deep`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          project_id: activeProject.id,
-          code: activeProject.code,
-          verification_id: verificationRecord.id
+          project_id: activeProject.id
         }),
       });
       
@@ -432,23 +431,12 @@ const handleStartVerification = async (level: string) => {
         throw new Error(`API request failed: ${response.statusText}`);
       }
       
-      const logicResponse = await response.json();
-      console.log("Logic generation response:", logicResponse);
+      const responseData = await response.json();
+      console.log("Deep verification response:", responseData);
       
-      // Update verification record with generated logic
-      await supabase
-        .from('verification_results')
-        .update({
-          spec_draft: logicResponse.spec || "# Logic generation failed. Please try again.",
-          status: VerificationStatus.AWAITING_CONFIRMATION,
-        })
-        .eq('id', verificationRecord.id);
-      
-      // Refresh verification record
-      await fetchLatestVerificationResult(activeProject.id);
-      
-      // Switch to the logic validation tab after specs are generated
-      setActiveVerificationTab("logic-validation");
+      // Start polling for results
+      setIsPollingResults(true);
+      startPolling(activeProject.id, verificationRecord.id);
       
     } catch (error) {
       console.error("Error in deep verification:", error);
@@ -469,8 +457,9 @@ const handleStartVerification = async (level: string) => {
           })
           .eq('id', verificationResult.id);
       }
-    } finally {
+      
       setIsLoadingAILogic(false);
+      setIsRunningVerification(false);
     }
     
     return;
@@ -508,17 +497,14 @@ const handleStartVerification = async (level: string) => {
     setVerificationResult(verificationRecord);
     setIsPollingResults(true);
     
-    // Make actual API call to backend
-    const response = await fetch(`${apiUrl}/verify`, {
+    // Changed from /verify to /verify/simple to match backend
+    const response = await fetch(`${apiUrl}/verify/simple`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        project_id: activeProject.id,
-        code: activeProject.code,
-        verification_id: verificationRecord.id,
-        level: level
+        project_id: activeProject.id
       }),
     });
     
@@ -527,6 +513,9 @@ const handleStartVerification = async (level: string) => {
       console.error("API error:", errorText);
       throw new Error(`API request failed: ${response.statusText}`);
     }
+    
+    const responseData = await response.json();
+    console.log("Simple verification response:", responseData);
     
     // Start polling for results
     startPolling(activeProject.id, verificationRecord.id);
@@ -571,18 +560,13 @@ const handleConfirmLogic = async (logicText: string) => {
     setActiveVerificationTab("verification");
     setIsPollingResults(true);
     
-    // Make actual API call to backend with confirmed logic
-    const response = await fetch(`${apiUrl}/verify_with_logic`, {
+    // Changed from /verify_with_logic to /verify/confirm/{id} to match backend
+    const response = await fetch(`${apiUrl}/verify/confirm/${verificationResult.id}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        project_id: activeProject.id,
-        code: activeProject.code,
-        verification_id: verificationResult.id,
-        logic: logicText
-      }),
+      body: JSON.stringify(logicText),
     });
     
     if (!response.ok) {
@@ -590,6 +574,9 @@ const handleConfirmLogic = async (logicText: string) => {
       console.error("API error:", errorText);
       throw new Error(`API request failed: ${response.statusText}`);
     }
+    
+    const responseData = await response.json();
+    console.log("Logic confirmation response:", responseData);
     
     // Start polling for results
     startPolling(activeProject.id, verificationResult.id);
