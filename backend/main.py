@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Body
 from fastapi.responses import JSONResponse
 import os
 import tempfile
@@ -674,6 +674,12 @@ async def finalize_deep_verification(project_id: str, verification_id: str, appr
         if isinstance(cvl_response, dict):
             cvl_code = cvl_response.get("content", "")
         
+        try:
+            supabase_client.table("verification_results").update({"cvl_code": cvl_code}).eq("id", verification_id).execute()
+            logger.info(f"Stored CVL code for verification {verification_id}")
+        except Exception as e:
+           logger.error(f"Failed to store CVL code: {e}")
+
         # Run Certora Prover
         logger.info("Running Certora Prover with generated CVL code")
         certora_results = run_certoraprover(contract_path, cvl_code)
@@ -799,46 +805,87 @@ async def verify_deep(request: VerificationRequest, background_tasks: Background
     )
 
 @app.post("/verify/confirm/{verification_id}", response_model=VerificationResponse)
-async def confirm_specifications(verification_id: str, specifications: Dict[str, Any], background_tasks: BackgroundTasks):
-    """Confirm and finalize deep verification with user-approved specifications"""
+async def confirm_specifications(
+    verification_id: str,
+    background_tasks: BackgroundTasks,
+    specifications: Any = Body(...)):
+
     logger.info(f"Received confirmation for verification ID {verification_id}")
-    try:
-        # Get verification record
-        response = supabase_client.table("verification_results").select("*").eq("id", verification_id).execute()
-        
-        if not response.data or len(response.data) == 0:
-            logger.error(f"Verification record with ID {verification_id} not found")
-            raise HTTPException(status_code=404, detail=f"Verification record with ID {verification_id} not found")
-        
-        verification = response.data[0]
-        
-        if verification["status"] != "awaiting_confirmation":
-            logger.error(f"Verification {verification_id} is not awaiting confirmation, current status: {verification['status']}")
-            raise HTTPException(status_code=400, detail="This verification is not awaiting confirmation")
-        
-        # Update status
-        supabase_client.table("verification_results").update({
-            "status": "processing"
-        }).eq("id", verification_id).execute()
-        
-        # Convert specifications to string if they're not already
-        spec_str = specifications if isinstance(specifications, str) else json.dumps(specifications)
-        
-        # Start background task for finalization
-        background_tasks.add_task(finalize_deep_verification, verification["project_id"], verification_id, spec_str)
-        
-        logger.info(f"Deep verification confirmation processing for ID {verification_id}")
-        return VerificationResponse(
-            verification_id=verification_id,
-            status="processing",
-            message="Deep verification processing with approved specifications"
+    logger.debug(f"Request body: {specifications}")
+
+    # 1) Fetch existing record
+    resp = supabase_client.table("verification_results")\
+        .select("*")\
+        .eq("id", verification_id)\
+        .execute()
+    if not resp.data:
+        logger.error(f"Verification record with ID {verification_id} not found")
+        raise HTTPException(status_code=404, detail="Verification record not found")
+
+    verification = resp.data[0]
+    spec_draft = verification.get("spec_draft", "")
+
+    # 2) Reset to awaiting_confirmation if needed
+    if verification["status"] != "awaiting_confirmation":
+        logger.info(
+            f"Resetting status for {verification_id} "
+            f"from {verification['status']} → awaiting_confirmation"
         )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error confirming specifications: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error confirming specifications: {str(e)}")
+        update_resp = supabase_client.table("verification_results")\
+            .update({"status": "awaiting_confirmation"})\
+            .eq("id", verification_id)\
+            .execute()
+        if not getattr(update_resp, "data", None):
+            logger.error("Failed to reset status to awaiting_confirmation")
+            raise HTTPException(status_code=500, detail="Could not reset verification status")
+        verification["status"] = "awaiting_confirmation"
+
+    # 3) Normalize incoming specs
+    if isinstance(specifications, str):
+        spec_str = specifications
+    elif isinstance(specifications, dict) and "specifications" in specifications:
+        spec_str = specifications["specifications"]
+    else:
+        spec_str = json.dumps(specifications)
+
+    if not spec_str.strip():
+        logger.error("Empty specifications provided")
+        raise HTTPException(status_code=400, detail="Specifications cannot be empty")
+
+    if spec_draft and spec_str != spec_draft:
+        logger.warning(f"Provided specs differ from draft: {spec_draft}")
+
+    # 4) Update status → 'running'
+        # 4) Update status → 'running' and save the draft
+    proc_resp = supabase_client.table("verification_results") \
+        .update({
+            "status": "running",
+            "spec_draft": spec_str           # ← use spec_draft, not specifications
+        }) \
+        .eq("id", verification_id) \
+        .execute()
+
+    if not getattr(proc_resp, "data", None):
+        logger.error("Failed to update status to running")
+        raise HTTPException(status_code=500, detail="Could not update to running")
+
+    # 5) Launch background task
+    background_tasks.add_task(
+        finalize_deep_verification,
+        verification["project_id"],
+        verification_id,
+        spec_str
+    )
+
+        # …
+
+    logger.info(f"Deep verification for ID {verification_id} is now running")
+    return VerificationResponse(
+        verification_id=verification_id,           # <— use the correct field name
+        status="running",
+        message="Deep verification is now running"  # <— provide the required message field
+    )
+
 
 @app.get("/verification/{verification_id}")
 async def get_verification_status(verification_id: str):

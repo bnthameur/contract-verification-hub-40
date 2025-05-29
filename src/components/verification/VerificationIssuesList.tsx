@@ -73,15 +73,7 @@ export function VerificationIssuesList({
             </SelectContent>
           </Select>
 
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => navigate(-1)}
-            className="gap-2"
-          >
-            <History className="h-4 w-4" />
-            View History
-          </Button>
+          
         </div>
         
         <div className="text-sm text-muted-foreground">
