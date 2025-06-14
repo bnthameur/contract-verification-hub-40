@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Body
 from fastapi.responses import JSONResponse
 import os
@@ -34,11 +33,16 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 DEEPSEEK_REASONER_URL = os.environ.get("DEEPSEEK_REASONER_URL")
 DEEPSEEK_CHAT_URL = os.environ.get("DEEPSEEK_CHAT_URL")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
 # Validate essential environment variables
-if not all([SUPABASE_URL, SUPABASE_KEY, DEEPSEEK_API_KEY]):
+if not all([SUPABASE_URL, SUPABASE_KEY]):
     logger.error("Missing essential environment variables")
-    raise EnvironmentError("Missing essential environment variables. Check SUPABASE_URL, SUPABASE_KEY, and DEEPSEEK_API_KEY")
+    raise EnvironmentError("Missing essential environment variables. Check SUPABASE_URL and SUPABASE_KEY")
+
+# Check for AI API keys
+if not DEEPSEEK_API_KEY and not OPENROUTER_API_KEY:
+    logger.warning("No AI API keys found. AI features will be disabled.")
 
 supabase_client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -81,6 +85,8 @@ def create_verification_record(project_id: str, level: str) -> str:
             "project_id": project_id,
             "level": level,
             "status": "running",
+            "results": [],
+            "logs": ["Verification started"],
             "created_at": datetime.now().isoformat()
         }).execute()
         
@@ -98,50 +104,59 @@ def create_verification_record(project_id: str, level: str) -> str:
         raise HTTPException(status_code=500, detail=f"Error creating verification record: {str(e)}")
 
 
-def update_verification_status(verification_id: str, status: str, results: Dict[str, Any], spec_draft: str = None, spec_used: str = None):
+def update_verification_status(verification_id: str, status: str, results: Dict[str, Any] = None, spec_draft: str = None, spec_used: str = None):
     """Update the verification record with results"""
     logger.info(f"Updating verification record {verification_id} with status {status}")
     
-    # Handle results appropriately based on type
-    results_issues = []
-    logs = ["Verification started"]
-    
-    if isinstance(results, dict):
-        if "results" in results:
-            results_issues = results["results"]
-        if "logs" in results:
-            logs = results["logs"]
-        if "error" in results:
-            # Add the error to logs
-            logs.append(f"Error: {results['error']}")
-    
-    # Ensure we have minimal logs even if none provided
-    if not logs:
-        logs = ["Verification started"]
-        if status == "completed":
-            logs.append("Verification completed")
-        elif status == "failed":
-            logs.append("Verification failed")
-    
+    # Initialize update data with basic required fields
     update_data = {
         "status": status,
-        "results": results_issues,
-        "logs": logs,
         "completed_at": datetime.now().isoformat() if status in ["completed", "failed"] else None
     }
     
-    if spec_draft:
+    # Handle results parameter
+    if results:
+        if isinstance(results, dict):
+            if "results" in results:
+                update_data["results"] = results["results"]
+            if "logs" in results:
+                update_data["logs"] = results["logs"]
+            if "error" in results:
+                update_data["logs"] = update_data.get("logs", []) + [f"Error: {results['error']}"]
+        else:
+            # If results is not a dict, treat it as error message
+            update_data["logs"] = [f"Error: {str(results)}"]
+    
+    # Ensure we always have logs
+    if "logs" not in update_data:
+        update_data["logs"] = ["Verification started"]
+        if status == "completed":
+            update_data["logs"].append("Verification completed")
+        elif status == "failed":
+            update_data["logs"].append("Verification failed")
+    
+    # Handle spec_draft parameter - this was the main issue
+    if spec_draft is not None:
         update_data["spec_draft"] = spec_draft
+        logger.info(f"Setting spec_draft for verification {verification_id}")
 
-    if spec_used:
+    # Handle spec_used parameter
+    if spec_used is not None:
         update_data["spec_used"] = spec_used
+        logger.info(f"Setting spec_used for verification {verification_id}")
     
     try:
-        supabase_client.table("verification_results").update(update_data).eq("id", verification_id).execute()
-        logger.info(f"Successfully updated verification record {verification_id}")
+        response = supabase_client.table("verification_results").update(update_data).eq("id", verification_id).execute()
+        
+        # Check if update was successful
+        if response.data:
+            logger.info(f"Successfully updated verification record {verification_id}")
+        else:
+            logger.error(f"No data returned from update operation for verification {verification_id}")
+            
     except Exception as e:
-        logger.error(f"Error updating verification record: {str(e)}")
-        print(f"Error updating verification record: {str(e)}")
+        logger.error(f"Error updating verification record {verification_id}: {str(e)}")
+        raise Exception(f"Database update failed: {str(e)}")
 
 def run_slither_analysis(contract_file_path: str) -> Dict[str, Any]:
     """Run Slither analysis on the smart contract"""
@@ -164,26 +179,61 @@ def run_slither_analysis(contract_file_path: str) -> Dict[str, Any]:
         logger.error(f"Error running Slither: {str(e)}")
         return {"error": f"Error running Slither: {str(e)}"}
 
-# In process_results_with_ai function, add a timeout parameter
+# AI processing function
 from openai import OpenAI
-def process_results_with_ai(content: str, prompt: str, mode: str = "chat", timeout=30):
-    client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
-    model = "deepseek-chat" if mode == "chat" else "deepseek-reasoner"
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": content}
-            ],
-            temperature=0.7,
-            max_tokens=2000
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        logger.error(f"DeepSeek API Error: {str(e)}")
-        return {"error": f"DeepSeek API Error: {str(e)}"}
 
+def process_results_with_ai(content: str, prompt: str, mode: str = "chat", timeout=30):
+    """Process results using AI with fallback options"""
+    
+    # Try OpenRouter first if available
+    if OPENROUTER_API_KEY:
+        try:
+            client = OpenAI(
+                api_key=OPENROUTER_API_KEY,
+                base_url="https://openrouter.ai/api/v1"
+            )
+            
+            if mode == "reasoner":
+                model = "deepseek/deepseek-r1-0528:free"
+            else:
+                model = "meta-llama/llama-3.3-8b-instruct:free"
+            
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": content}
+                ],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            logger.error(f"OpenRouter API Error: {str(e)}")
+    
+    # Fallback to DeepSeek if available
+    if DEEPSEEK_API_KEY:
+        try:
+            client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+            model = "deepseek-chat" if mode == "chat" else "deepseek-reasoner"
+            
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": content}
+                ],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            logger.error(f"DeepSeek API Error: {str(e)}")
+    
+    # No AI available
+    return {"error": "No AI API keys configured"}
 
 class CertoraRunner:
     """A class to manage Certora Prover runs with a reusable virtual environment"""
@@ -355,6 +405,7 @@ def run_certoraprover(contract_file_path: str, cvl_code: str, certora_root: str 
         logger = logging.getLogger(__name__)
         logger.error(f"Error in run_certoraprover: {str(e)}")
         return {"success": False, "error": str(e)}
+
 # Verification tasks
 async def run_simple_verification(project_id: str, verification_id: str):
     logger.info(f"Starting simple verification for project {project_id}")
@@ -425,7 +476,36 @@ async def run_simple_verification(project_id: str, verification_id: str):
             "Verification completed"
         ]
         }
-        Replace all placeholders. Write realistic issue titles, descriptions, line numbers, and severity based on the actual Slither findings. Use standard naming conventions for issues (e.g., "Reentrancy vulnerability", "Unchecked return value", etc.). Do not include unrelated information. Your output should be a well-formed JSON object ready for insertion into Supabase."""
+        Your job is to turn that noisy text into a concise, developer-friendly security report in JSON.
+
+Follow these rules strictly:
+
+Read the entire Slither output and extract every unique finding that affects the contract's security or correctness.
+
+For each finding produce:
+
+id   : "issue-1", "issue-2", … (increment starting from 1)
+
+type  : error | warning | info (map Slither "High" ⇒ error, "Medium" ⇒ warning, "Low / Informational" ⇒ info)
+
+title  : ≤ 120 characters, Title Case, no file paths or IDs (e.g., "Reentrancy Vulnerability")
+
+description: 2–4 short sentences in plain English.
+– Explain the risk.
+– Give 1–2 concrete hints to fix or mitigate (e.g., "Use checks-effects-interactions pattern").
+
+line  : [single line number] or [] if Slither did not specify.
+
+file  : "ContractName.sol" (basename only).
+
+severity: high | medium | low (use industry standard mapping, not Slither's labels verbatim).
+
+Group duplicates (same root cause) into a single JSON entry.
+
+Do NOT invent issues that do not appear in the Slither output.
+
+Output must be a single, valid JSON object in the exact shape below—no extra keys, no comments, no markdown.
+        Replace all placeholders. Write realistic issue titles, descriptions "that are better and let the user informed well about issues and hints to fix without hard reading results or complex description or any id mentionned ot slashes(/), process it well", line numbers, and severity based on the actual Slither findings. Use standard naming conventions for issues (e.g., "Reentrancy vulnerability", "Unchecked return value", etc.). Do not include unrelated information. Your output should be a well-formed JSON object ready for insertion into Supabase."""
         
         # Increase timeout for AI processing
         processed_results = process_results_with_ai(json.dumps(slither_results), ai_prompt, "chat", timeout=60)
@@ -598,7 +678,7 @@ async def run_deep_verification(project_id: str, verification_id: str):
             update_verification_status(verification_id, "failed", error_data)
             return
             
-        # Update record with draft specifications
+        # Update record with draft specifications - FIX: Pass spec_draft correctly
         spec_update = {
             "results": [],
             "logs": ["Deep verification initiated", "Generating formal specifications", "Specifications generated", "Awaiting user confirmation"]
@@ -607,9 +687,12 @@ async def run_deep_verification(project_id: str, verification_id: str):
         logger.info("Updating verification record with draft specifications")
         # Convert spec_draft to string if it's not already
         if not isinstance(spec_draft, str):
-            spec_draft = json.dumps(spec_draft)
+            spec_draft_str = json.dumps(spec_draft) if spec_draft else ""
+        else:
+            spec_draft_str = spec_draft
             
-        update_verification_status(verification_id, "awaiting_confirmation", spec_update, spec_draft)
+        # FIX: This was the main issue - properly save spec_draft
+        update_verification_status(verification_id, "awaiting_confirmation", spec_update, spec_draft_str)
         
         # Clean up
         os.unlink(contract_path)
@@ -831,14 +914,7 @@ async def confirm_specifications(
             f"Resetting status for {verification_id} "
             f"from {verification['status']} → awaiting_confirmation"
         )
-        update_resp = supabase_client.table("verification_results")\
-            .update({"status": "awaiting_confirmation"})\
-            .eq("id", verification_id)\
-            .execute()
-        if not getattr(update_resp, "data", None):
-            logger.error("Failed to reset status to awaiting_confirmation")
-            raise HTTPException(status_code=500, detail="Could not reset verification status")
-        verification["status"] = "awaiting_confirmation"
+        update_verification_status(verification_id, "awaiting_confirmation")
 
     # 3) Normalize incoming specs
     if isinstance(specifications, str):
@@ -853,21 +929,10 @@ async def confirm_specifications(
         raise HTTPException(status_code=400, detail="Specifications cannot be empty")
 
     if spec_draft and spec_str != spec_draft:
-        logger.warning(f"Provided specs differ from draft: {spec_draft}")
+        logger.warning(f"Provided specs differ from draft")
 
-    # 4) Update status → 'running'
-        # 4) Update status → 'running' and save the draft
-    proc_resp = supabase_client.table("verification_results") \
-        .update({
-            "status": "running",
-            "spec_draft": spec_str           # ← use spec_draft, not specifications
-        }) \
-        .eq("id", verification_id) \
-        .execute()
-
-    if not getattr(proc_resp, "data", None):
-        logger.error("Failed to update status to running")
-        raise HTTPException(status_code=500, detail="Could not update to running")
+    # 4) Update status → 'running' and save the draft
+    update_verification_status(verification_id, "running", {"logs": ["Deep verification initiated", "Specifications confirmed by user", "Running formal verification"]}, spec_str)
 
     # 5) Launch background task
     background_tasks.add_task(
@@ -877,13 +942,11 @@ async def confirm_specifications(
         spec_str
     )
 
-        # …
-
     logger.info(f"Deep verification for ID {verification_id} is now running")
     return VerificationResponse(
-        verification_id=verification_id,           # <— use the correct field name
+        verification_id=verification_id,
         status="running",
-        message="Deep verification is now running"  # <— provide the required message field
+        message="Deep verification is now running"
     )
 
 
