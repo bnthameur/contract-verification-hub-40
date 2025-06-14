@@ -134,17 +134,26 @@ export function VerificationPanel({
 
   const issues = verificationResult?.results || [];
   
-  // Determine current state more precisely
+  // Determine current state more precisely with detailed logging
+  console.log("VerificationPanel state check:", {
+    verificationResult,
+    status: verificationResult?.status,
+    hasSpecDraft: !!verificationResult?.spec_draft,
+    hasResults: !!(verificationResult?.results && verificationResult.results.length > 0),
+    isPollingResults,
+    isRunningVerification
+  });
+
   const isPending = verificationResult?.status === VerificationStatus.PENDING;
   const isRunning = verificationResult?.status === VerificationStatus.RUNNING;
   const isAwaitingConfirmation = verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION;
   const isCompleted = verificationResult?.status === VerificationStatus.COMPLETED;
   const isFailed = verificationResult?.status === VerificationStatus.FAILED;
   
-  // Check if we should show loading screen
-  const shouldShowLoading = (isPending || isRunning) && !isAwaitingConfirmation;
+  // Check if we should show loading screen - only if no spec_draft available for awaiting confirmation
+  const shouldShowLoading = (isPending || isRunning) || (isAwaitingConfirmation && !verificationResult?.spec_draft);
   
-  // Check if we should show logic validation
+  // Check if we should show logic validation - must have spec_draft
   const shouldShowLogicValidation = isAwaitingConfirmation && verificationResult?.spec_draft;
   
   const handleConfirmLogic = async (logicText: string) => {
@@ -197,7 +206,8 @@ export function VerificationPanel({
       isFailed,
       showNewVerification,
       verificationStatus: verificationResult?.status,
-      hasSpecDraft: !!verificationResult?.spec_draft
+      hasSpecDraft: !!verificationResult?.spec_draft,
+      hasResults: !!(verificationResult?.results && verificationResult.results.length > 0)
     });
 
     // Show backend connection warning
@@ -210,18 +220,9 @@ export function VerificationPanel({
       );
     }
     
-    // Show loading state for pending/running (but not awaiting confirmation)
-    if (shouldShowLoading) {
-      return (
-        <VerificationLoading
-          verificationLevel={verificationLevel}
-          onCancel={handleCancelVerification}
-        />
-      );
-    }
-    
-    // Show logic validation when awaiting confirmation with spec_draft
+    // Show logic validation when awaiting confirmation with spec_draft - HIGHEST PRIORITY
     if (shouldShowLogicValidation) {
+      console.log("Showing logic validation with spec_draft");
       return (
         <LogicValidation 
           project_id={project?.id || ''}
@@ -234,21 +235,20 @@ export function VerificationPanel({
       );
     }
     
-    // Show new verification form if button was clicked
-    if (showNewVerification) {
+    // Show loading state for pending/running and awaiting confirmation without spec_draft
+    if (shouldShowLoading) {
+      console.log("Showing loading state");
       return (
-        <VerificationFormNew
+        <VerificationLoading
           verificationLevel={verificationLevel}
-          onVerificationLevelChange={setVerificationLevel}
-          onCancel={() => setShowNewVerification(false)}
-          onVerify={handleVerify}
-          isDisabled={!project || !verificationLevel}
+          onCancel={handleCancelVerification}
         />
       );
     }
     
     // Show completed verification with results
     if (isCompleted) {
+      console.log("Showing completed verification");
       return (
         <VerificationCompleted 
           verificationResult={verificationResult}
@@ -263,6 +263,7 @@ export function VerificationPanel({
     
     // Show failed state
     if (isFailed) {
+      console.log("Showing failed state");
       return (
         <VerificationFailed 
           onRetry={() => setShowNewVerification(true)}
@@ -271,8 +272,23 @@ export function VerificationPanel({
       );
     }
     
+    // Show new verification form if button was clicked
+    if (showNewVerification) {
+      console.log("Showing new verification form");
+      return (
+        <VerificationFormNew
+          verificationLevel={verificationLevel}
+          onVerificationLevelChange={setVerificationLevel}
+          onCancel={() => setShowNewVerification(false)}
+          onVerify={handleVerify}
+          isDisabled={!project || !verificationLevel}
+        />
+      );
+    }
+    
     // Show empty state for projects without verification history
     if (!verificationResult) {
+      console.log("Showing empty state");
       return (
         <VerificationEmpty 
           verificationLevel={verificationLevel}
@@ -284,6 +300,7 @@ export function VerificationPanel({
     }
     
     // Default return for any other state
+    console.log("Showing default start new verification button");
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
         <Button

@@ -105,7 +105,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Polling function for verification results - FIXED to handle all states properly
+  // Polling function for verification results - ENHANCED to handle all states properly
   const startPolling = useCallback((projectId: string, resultId: string) => {
     console.log("Starting polling for verification:", resultId);
     
@@ -123,34 +123,67 @@ export default function DashboardPage() {
           console.error('Polling error:', error);
           clearInterval(pollingInterval);
           setIsPollingResults(false);
+          setIsRunningVerification(false);
+          setIsLoadingAILogic(false);
           return;
         }
         
         if (data) {
-          console.log("Polling received data:", data);
+          console.log("Polling received data:", {
+            id: data.id,
+            status: data.status,
+            hasSpecDraft: !!data.spec_draft,
+            hasResults: !!(data.results && data.results.length > 0),
+            resultsCount: data.results ? data.results.length : 0
+          });
+          
           setVerificationResult(data);
           
-          // Stop polling only when verification is truly finished (completed or failed)
-          // Keep polling for PENDING, RUNNING, and AWAITING_CONFIRMATION
-          if (data.status === VerificationStatus.COMPLETED || data.status === VerificationStatus.FAILED) {
-            console.log("Verification finished, stopping polling:", data.status);
+          // Enhanced stopping conditions
+          const shouldStopPolling = 
+            data.status === VerificationStatus.COMPLETED || 
+            data.status === VerificationStatus.FAILED ||
+            (data.status === VerificationStatus.AWAITING_CONFIRMATION && data.spec_draft);
+          
+          if (shouldStopPolling) {
+            console.log("Stopping polling due to condition:", {
+              status: data.status,
+              hasSpecDraft: !!data.spec_draft,
+              shouldStopPolling
+            });
+            
             clearInterval(pollingInterval);
             setIsPollingResults(false);
             setIsRunningVerification(false);
             setIsLoadingAILogic(false);
+            
+            // Show appropriate toast based on the result
+            if (data.status === VerificationStatus.COMPLETED) {
+              toast({
+                title: "Verification Complete",
+                description: `Found ${data.results ? data.results.length : 0} issues`,
+              });
+            } else if (data.status === VerificationStatus.AWAITING_CONFIRMATION && data.spec_draft) {
+              toast({
+                title: "Logic Ready",
+                description: "Review and confirm the generated verification logic",
+              });
+            }
           } else {
-            console.log("Verification still in progress:", data.status);
+            console.log("Continuing polling, verification still in progress:", data.status);
           }
         }
       } catch (error) {
         console.error('Error in polling:', error);
         clearInterval(pollingInterval);
         setIsPollingResults(false);
+        setIsRunningVerification(false);
+        setIsLoadingAILogic(false);
       }
-    }, 2000); // Poll every 2 seconds for more responsive updates
+    }, 1500); // Poll every 1.5 seconds for more responsive updates
     
     return () => clearInterval(pollingInterval);
-  }, []);
+  }, [toast]);
 
   const handleSaveCode = async () => {
     if (!activeProject || !user) return;
@@ -554,7 +587,7 @@ const handleConfirmLogic = async (logicText: string) => {
     
     console.log("Confirming logic with backend at:", apiUrl);
     
-    // Update the verification result with confirmed logic
+    // Update the verification result with confirmed logic and start polling again
     const { error } = await supabase
       .from('verification_results')
       .update({
@@ -566,7 +599,10 @@ const handleConfirmLogic = async (logicText: string) => {
       
     if (error) throw error;
     
+    // Restart polling for the running verification
     setIsPollingResults(true);
+    setIsRunningVerification(true);
+    startPolling(activeProject.id, verificationResult.id);
     
     // Send the logicText as a plain string, not wrapped in an object
     const response = await fetch(`${apiUrl}/verify/confirm/${verificationResult.id}`, {
@@ -585,9 +621,6 @@ const handleConfirmLogic = async (logicText: string) => {
     
     const responseData = await response.json();
     console.log("Logic confirmation response:", responseData);
-    
-    // Start polling for results
-    startPolling(activeProject.id, verificationResult.id);
     
     toast({
       title: "Verification In Progress",

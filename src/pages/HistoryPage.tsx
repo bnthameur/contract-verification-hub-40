@@ -132,6 +132,8 @@ export default function HistoryPage() {
         return <Badge variant="outline" className="text-blue-500 border-blue-500"><Clock className="h-3 w-3 mr-1 animate-spin" /> Running</Badge>;
       case VerificationStatus.PENDING:
         return <Badge variant="outline"><Clock className="h-3 w-3 mr-1" /> Pending</Badge>;
+      case VerificationStatus.AWAITING_CONFIRMATION:
+        return <Badge variant="outline"><Clock className="h-3 w-3 mr-1" /> Awaiting Confirmation</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -179,6 +181,25 @@ export default function HistoryPage() {
       warningCount > 0 ? `${warningCount} warning${warningCount !== 1 ? 's' : ''}` : '',
       infoCount > 0 ? `${infoCount} info` : '',
     ].filter(Boolean).join(', ');
+  };
+  
+  const handleResumeVerification = async (verification: VerificationResult) => {
+    if (verification.status !== VerificationStatus.AWAITING_CONFIRMATION || !verification.spec_draft) {
+      toast({
+        title: "Cannot Resume",
+        description: "This verification cannot be resumed.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    toast({
+      title: "Redirecting",
+      description: "Taking you back to the dashboard to resume verification.",
+    });
+    
+    // Navigate back to dashboard - the verification panel will pick up the awaiting confirmation state
+    navigate('/dashboard');
   };
   
   if (loading) {
@@ -296,6 +317,20 @@ export default function HistoryPage() {
                                   </div>
                                 )}
                               </div>
+                              
+                              {verification.status === VerificationStatus.AWAITING_CONFIRMATION && verification.spec_draft && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="w-full mt-2"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleResumeVerification(verification);
+                                  }}
+                                >
+                                  Resume Verification
+                                </Button>
+                              )}
                             </div>
                           </CardContent>
                         </Card>
