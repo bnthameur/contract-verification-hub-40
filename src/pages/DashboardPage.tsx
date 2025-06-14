@@ -87,15 +87,37 @@ export default function DashboardPage() {
       if (error) throw error;
       
       if (data && data.length > 0) {
+        console.log("📊 Fetched latest verification result:", {
+          id: data[0].id,
+          status: data[0].status,
+          hasResults: !!(data[0].results && data[0].results.length > 0),
+          hasSpecDraft: !!data[0].spec_draft
+        });
+        
         setVerificationResult(data[0]);
         
-        // CRITICAL: Only start polling if verification is still in progress
+        // CRITICAL: Immediately stop all loading states if verification is complete
+        if (data[0].status === VerificationStatus.COMPLETED || data[0].status === VerificationStatus.FAILED) {
+          console.log("🛑 IMMEDIATE STOP: Verification is complete/failed");
+          setIsPollingResults(false);
+          setIsRunningVerification(false);
+          setIsLoadingAILogic(false);
+          return;
+        }
+        
+        // CRITICAL: Stop AI loading if spec_draft is available
+        if (data[0].status === VerificationStatus.AWAITING_CONFIRMATION && data[0].spec_draft) {
+          console.log("🛑 IMMEDIATE STOP: Logic is ready for confirmation");
+          setIsLoadingAILogic(false);
+        }
+        
+        // CRITICAL: Only start polling if verification is still genuinely in progress
         if (data[0].status === VerificationStatus.RUNNING || data[0].status === VerificationStatus.PENDING) {
           console.log("📊 Starting polling for in-progress verification");
           setIsPollingResults(true);
           startPolling(project_id, data[0].id);
         } else {
-          console.log("✅ Verification already complete, no polling needed");
+          console.log("✅ Verification not in progress, no polling needed");
           setIsPollingResults(false);
           setIsRunningVerification(false);
           setIsLoadingAILogic(false);
@@ -114,13 +136,27 @@ export default function DashboardPage() {
     }
   };
 
-  // Enhanced polling function with immediate completion detection
+  // Enhanced polling function with IMMEDIATE completion detection and auto-stop
   const startPolling = useCallback((projectId: string, resultId: string) => {
-    console.log("Starting enhanced polling for verification:", resultId);
+    console.log("Starting ENHANCED polling for verification:", resultId);
+    
+    let pollAttempts = 0;
+    const maxPollAttempts = 240; // 2 minutes max polling (500ms * 240 = 120 seconds)
     
     const pollingInterval = setInterval(async () => {
+      pollAttempts++;
+      
+      if (pollAttempts > maxPollAttempts) {
+        console.warn("⚠️ Max polling attempts reached, stopping polling");
+        clearInterval(pollingInterval);
+        setIsPollingResults(false);
+        setIsRunningVerification(false);
+        setIsLoadingAILogic(false);
+        return;
+      }
+      
       try {
-        console.log("Polling verification result:", resultId);
+        console.log(`Polling attempt ${pollAttempts} for verification result:`, resultId);
         
         const { data, error } = await supabase
           .from('verification_results')
@@ -151,7 +187,7 @@ export default function DashboardPage() {
           
           // IMMEDIATELY stop loading states when verification is complete
           if (data.status === VerificationStatus.COMPLETED) {
-            console.log("✅ Verification COMPLETED - stopping all loading states immediately");
+            console.log("✅ Verification COMPLETED - IMMEDIATE STOP of all loading states");
             clearInterval(pollingInterval);
             setIsPollingResults(false);
             setIsRunningVerification(false);
@@ -166,14 +202,14 @@ export default function DashboardPage() {
           
           // IMMEDIATELY show logic validation when spec_draft is ready
           if (data.status === VerificationStatus.AWAITING_CONFIRMATION && data.spec_draft) {
-            console.log("✅ Logic is ready - stopping AI loading, keeping verification active");
+            console.log("✅ Logic is ready - IMMEDIATE STOP of AI loading");
             setIsLoadingAILogic(false);
             // Keep polling for logic confirmation
           }
           
           // IMMEDIATELY stop if verification failed
           if (data.status === VerificationStatus.FAILED) {
-            console.log("❌ Verification FAILED - stopping all loading states");
+            console.log("❌ Verification FAILED - IMMEDIATE STOP of all loading states");
             clearInterval(pollingInterval);
             setIsPollingResults(false);
             setIsRunningVerification(false);
@@ -191,7 +227,7 @@ export default function DashboardPage() {
         setIsRunningVerification(false);
         setIsLoadingAILogic(false);
       }
-    }, 500); // Faster polling for more responsive updates (500ms instead of 1000ms)
+    }, 500); // Very fast polling for immediate response
     
     return () => clearInterval(pollingInterval);
   }, [toast]);
@@ -422,14 +458,17 @@ export default function DashboardPage() {
   };
 
   const handleStartVerification = async (level: string) => {
+    // Force stop any existing states first
+    setIsRunningVerification(false);
+    setIsPollingResults(false);
+    setIsLoadingAILogic(false);
+    
     await handleSaveCode();
     
     if (!activeProject) return;
     
     // Reset all states before starting
     setIsRunningVerification(true);
-    setIsPollingResults(false);
-    setIsLoadingAILogic(false);
     
     if (level === VerificationLevel.DEEP) {
       setIsLoadingAILogic(true);
@@ -500,18 +539,7 @@ export default function DashboardPage() {
           variant: "destructive"
         });
         
-        // Update status to failed if there's an error
-        if (verificationResult?.id) {
-          await supabase
-            .from('verification_results')
-            .update({
-              status: VerificationStatus.FAILED,
-              error_message: error instanceof Error ? error.message : "Unknown error",
-              completed_at: new Date().toISOString()
-            })
-            .eq('id', verificationResult.id);
-        }
-        
+        // Force stop all loading states on error
         setIsLoadingAILogic(false);
         setIsRunningVerification(false);
         setIsPollingResults(false);
@@ -784,36 +812,41 @@ export default function DashboardPage() {
     }
   }, [activeProject]);
 
-  // Effect to handle verification result state changes with immediate response
+  // CRITICAL: Enhanced effect to handle verification result state changes with IMMEDIATE response
   useEffect(() => {
     if (!verificationResult) return;
     
-    console.log("🔍 Verification result state changed:", {
+    console.log("🔍 ENHANCED verification result state changed:", {
       status: verificationResult.status,
       hasSpecDraft: !!verificationResult.spec_draft,
-      hasResults: !!(verificationResult.results && verificationResult.results.length > 0)
+      hasResults: !!(verificationResult.results && verificationResult.results.length > 0),
+      currentStates: {
+        isRunningVerification,
+        isLoadingAILogic,
+        isPollingResults
+      }
     });
     
-    // IMMEDIATE response to status changes
+    // IMMEDIATE and AGGRESSIVE response to status changes
     if (verificationResult.status === VerificationStatus.COMPLETED) {
-      console.log("✅ IMMEDIATE: Verification completed - clearing all loading states");
+      console.log("✅ IMMEDIATE & AGGRESSIVE: Verification completed - clearing ALL loading states");
       setIsRunningVerification(false);
       setIsLoadingAILogic(false);
       setIsPollingResults(false);
     }
     
     if (verificationResult.status === VerificationStatus.AWAITING_CONFIRMATION && verificationResult.spec_draft) {
-      console.log("📝 IMMEDIATE: Logic is ready for confirmation");
+      console.log("📝 IMMEDIATE & AGGRESSIVE: Logic is ready for confirmation");
       setIsLoadingAILogic(false);
     }
     
     if (verificationResult.status === VerificationStatus.FAILED) {
-      console.log("❌ IMMEDIATE: Verification failed - clearing all loading states");
+      console.log("❌ IMMEDIATE & AGGRESSIVE: Verification failed - clearing ALL loading states");
       setIsRunningVerification(false);
       setIsLoadingAILogic(false);
       setIsPollingResults(false);
     }
-  }, [verificationResult]);
+  }, [verificationResult?.status, verificationResult?.spec_draft, verificationResult?.results]);
 
   // Cleanup polling on unmount
   useEffect(() => {

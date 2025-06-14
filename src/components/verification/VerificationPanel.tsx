@@ -1,4 +1,3 @@
-
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { VerificationIssuesList } from "@/components/verification/VerificationIssuesList";
@@ -66,6 +65,47 @@ export function VerificationPanel({
   const [showNewVerification, setShowNewVerification] = useState<boolean>(false);
   const { toast } = useToast();
   
+  // CRITICAL: Add a force refresh mechanism to break loading loops
+  const [forceRefreshCounter, setForceRefreshCounter] = useState(0);
+  const [lastVerificationResultId, setLastVerificationResultId] = useState<string | null>(null);
+  
+  // Track verification result changes and force state updates
+  useEffect(() => {
+    if (verificationResult?.id && verificationResult.id !== lastVerificationResultId) {
+      console.log("🆕 New verification result detected:", {
+        id: verificationResult.id,
+        status: verificationResult.status,
+        hasResults: !!(verificationResult.results && verificationResult.results.length > 0),
+        hasSpecDraft: !!verificationResult.spec_draft
+      });
+      
+      setLastVerificationResultId(verificationResult.id);
+      setForceRefreshCounter(prev => prev + 1);
+    }
+  }, [verificationResult?.id, lastVerificationResultId]);
+  
+  // AGGRESSIVE: Force refresh every 2 seconds to prevent stuck states
+  useEffect(() => {
+    const aggressiveRefresh = setInterval(() => {
+      if (verificationResult) {
+        console.log("🔄 Aggressive state check:", {
+          status: verificationResult.status,
+          hasResults: !!(verificationResult.results && verificationResult.results.length > 0),
+          hasSpecDraft: !!verificationResult.spec_draft,
+          isRunningVerification,
+          isLoadingAILogic,
+          isPollingResults,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Force a counter increment to trigger re-evaluation
+        setForceRefreshCounter(prev => prev + 1);
+      }
+    }, 2000);
+    
+    return () => clearInterval(aggressiveRefresh);
+  }, [verificationResult, isRunningVerification, isLoadingAILogic, isPollingResults]);
+
   useEffect(() => {
     // Check backend connection
     const checkBackend = async () => {
@@ -134,8 +174,8 @@ export function VerificationPanel({
 
   const issues = verificationResult?.results || [];
   
-  // Clear state determination with better logic
-  console.log("VerificationPanel state analysis:", {
+  // ENHANCED state determination with force refresh consideration
+  console.log("VerificationPanel state analysis (refresh #" + forceRefreshCounter + "):", {
     verificationResult: !!verificationResult,
     status: verificationResult?.status,
     hasSpecDraft: !!verificationResult?.spec_draft,
@@ -147,17 +187,41 @@ export function VerificationPanel({
     backendConnected
   });
 
-  // Determine what content to show based on verification state
-  const shouldShowLogicValidation = verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION && !!verificationResult?.spec_draft;
-  const shouldShowCompletedResults = verificationResult?.status === VerificationStatus.COMPLETED && !!verificationResult?.results?.length;
+  // CRITICAL: More aggressive determination of what to show
+  const shouldShowLogicValidation = (
+    verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION && 
+    !!verificationResult?.spec_draft &&
+    !showNewVerification
+  );
+  
+  const shouldShowCompletedResults = (
+    verificationResult?.status === VerificationStatus.COMPLETED && 
+    !!verificationResult?.results?.length &&
+    !showNewVerification &&
+    !shouldShowLogicValidation
+  );
+  
+  // CRITICAL: Much stricter loading conditions
   const shouldShowLoading = (
-    verificationResult?.status === VerificationStatus.PENDING || 
-    verificationResult?.status === VerificationStatus.RUNNING ||
-    isRunningVerification ||
-    isLoadingAILogic ||
-    isPollingResults
-  ) && !shouldShowLogicValidation && !shouldShowCompletedResults;
-  const shouldShowFailed = verificationResult?.status === VerificationStatus.FAILED;
+    !shouldShowLogicValidation &&
+    !shouldShowCompletedResults &&
+    !showNewVerification &&
+    backendConnected &&
+    (
+      verificationResult?.status === VerificationStatus.PENDING || 
+      verificationResult?.status === VerificationStatus.RUNNING ||
+      (isRunningVerification && !verificationResult?.results?.length && !verificationResult?.spec_draft) ||
+      (isLoadingAILogic && !verificationResult?.spec_draft) ||
+      (isPollingResults && verificationResult?.status !== VerificationStatus.COMPLETED && verificationResult?.status !== VerificationStatus.FAILED)
+    )
+  );
+  
+  const shouldShowFailed = (
+    verificationResult?.status === VerificationStatus.FAILED &&
+    !showNewVerification &&
+    !shouldShowLogicValidation &&
+    !shouldShowCompletedResults
+  );
 
   const handleConfirmLogic = async (logicText: string) => {
     if (onConfirmLogicVerification) {
@@ -212,13 +276,14 @@ export function VerificationPanel({
   const [activeResultTab, setActiveResultTab] = useState<string>("issues");
 
   const renderVerificationContent = () => {
-    console.log("Rendering verification content with priority checks:", {
+    console.log("Rendering verification content with ENHANCED priority checks:", {
       backendConnected,
       shouldShowLogicValidation,
       shouldShowCompletedResults,
       shouldShowLoading,
       shouldShowFailed,
-      showNewVerification
+      showNewVerification,
+      forceRefreshCounter
     });
 
     // PRIORITY 1: Backend connection check
@@ -275,9 +340,9 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 5: Show loading states
+    // PRIORITY 5: Show loading states (with much stricter conditions)
     if (shouldShowLoading) {
-      console.log("✅ Showing loading state");
+      console.log("✅ Showing loading state (with enhanced conditions)");
       return (
         <VerificationLoading
           verificationLevel={verificationLevel}
