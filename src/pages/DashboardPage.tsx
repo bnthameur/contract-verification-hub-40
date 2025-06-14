@@ -32,6 +32,9 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const { user } = useAuth();
 
+  // SIMPLIFIED: Remove polling interval ref to prevent memory leaks
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     if (user) {
       fetchProjects();
@@ -87,7 +90,7 @@ export default function DashboardPage() {
       if (error) throw error;
       
       if (data && data.length > 0) {
-        console.log("📊 Fetched latest verification result:", {
+        console.log("📊 SIMPLIFIED: Fetched latest verification result:", {
           id: data[0].id,
           status: data[0].status,
           hasResults: !!(data[0].results && data[0].results.length > 0),
@@ -96,28 +99,14 @@ export default function DashboardPage() {
         
         setVerificationResult(data[0]);
         
-        // CRITICAL: Immediately stop all loading states if verification is complete
-        if (data[0].status === VerificationStatus.COMPLETED || data[0].status === VerificationStatus.FAILED) {
-          console.log("🛑 IMMEDIATE STOP: Verification is complete/failed");
-          setIsPollingResults(false);
-          setIsRunningVerification(false);
-          setIsLoadingAILogic(false);
-          return;
-        }
-        
-        // CRITICAL: Stop AI loading if spec_draft is available
-        if (data[0].status === VerificationStatus.AWAITING_CONFIRMATION && data[0].spec_draft) {
-          console.log("🛑 IMMEDIATE STOP: Logic is ready for confirmation");
-          setIsLoadingAILogic(false);
-        }
-        
-        // CRITICAL: Only start polling if verification is still genuinely in progress
-        if (data[0].status === VerificationStatus.RUNNING || data[0].status === VerificationStatus.PENDING) {
-          console.log("📊 Starting polling for in-progress verification");
+        // SIMPLIFIED: Only set polling if verification is genuinely in progress
+        if (data[0].status === VerificationStatus.PENDING || data[0].status === VerificationStatus.RUNNING) {
+          console.log("📊 SIMPLIFIED: Starting polling for in-progress verification");
           setIsPollingResults(true);
           startPolling(project_id, data[0].id);
         } else {
-          console.log("✅ Verification not in progress, no polling needed");
+          console.log("✅ SIMPLIFIED: Verification complete or awaiting confirmation");
+          // IMMEDIATELY stop all loading states
           setIsPollingResults(false);
           setIsRunningVerification(false);
           setIsLoadingAILogic(false);
@@ -136,19 +125,28 @@ export default function DashboardPage() {
     }
   };
 
-  // Enhanced polling function with IMMEDIATE completion detection and auto-stop
+  // SIMPLIFIED polling function with immediate stop conditions
   const startPolling = useCallback((projectId: string, resultId: string) => {
-    console.log("Starting ENHANCED polling for verification:", resultId);
+    console.log("SIMPLIFIED: Starting polling for verification:", resultId);
+    
+    // Clear any existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
     
     let pollAttempts = 0;
-    const maxPollAttempts = 240; // 2 minutes max polling (500ms * 240 = 120 seconds)
+    const maxPollAttempts = 120; // 1 minute max polling (500ms * 120 = 60 seconds)
     
-    const pollingInterval = setInterval(async () => {
+    pollingIntervalRef.current = setInterval(async () => {
       pollAttempts++;
       
       if (pollAttempts > maxPollAttempts) {
-        console.warn("⚠️ Max polling attempts reached, stopping polling");
-        clearInterval(pollingInterval);
+        console.warn("⚠️ SIMPLIFIED: Max polling attempts reached, stopping polling");
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
         setIsPollingResults(false);
         setIsRunningVerification(false);
         setIsLoadingAILogic(false);
@@ -156,7 +154,7 @@ export default function DashboardPage() {
       }
       
       try {
-        console.log(`Polling attempt ${pollAttempts} for verification result:`, resultId);
+        console.log(`SIMPLIFIED: Polling attempt ${pollAttempts} for verification result:`, resultId);
         
         const { data, error } = await supabase
           .from('verification_results')
@@ -165,8 +163,11 @@ export default function DashboardPage() {
           .single();
           
         if (error) {
-          console.error('Polling error:', error);
-          clearInterval(pollingInterval);
+          console.error('SIMPLIFIED: Polling error:', error);
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
           setIsPollingResults(false);
           setIsRunningVerification(false);
           setIsLoadingAILogic(false);
@@ -174,7 +175,7 @@ export default function DashboardPage() {
         }
         
         if (data) {
-          console.log("Polling received data:", {
+          console.log("SIMPLIFIED: Polling received data:", {
             id: data.id,
             status: data.status,
             hasSpecDraft: !!data.spec_draft,
@@ -185,10 +186,13 @@ export default function DashboardPage() {
           // Update verification result immediately
           setVerificationResult(data);
           
-          // IMMEDIATELY stop loading states when verification is complete
+          // IMMEDIATELY stop polling and loading states when verification is complete
           if (data.status === VerificationStatus.COMPLETED) {
-            console.log("✅ Verification COMPLETED - IMMEDIATE STOP of all loading states");
-            clearInterval(pollingInterval);
+            console.log("✅ SIMPLIFIED: Verification COMPLETED - IMMEDIATE STOP");
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
             setIsPollingResults(false);
             setIsRunningVerification(false);
             setIsLoadingAILogic(false);
@@ -202,15 +206,18 @@ export default function DashboardPage() {
           
           // IMMEDIATELY show logic validation when spec_draft is ready
           if (data.status === VerificationStatus.AWAITING_CONFIRMATION && data.spec_draft) {
-            console.log("✅ Logic is ready - IMMEDIATE STOP of AI loading");
+            console.log("✅ SIMPLIFIED: Logic is ready - STOP AI loading");
             setIsLoadingAILogic(false);
-            // Keep polling for logic confirmation
+            // Keep polling for logic confirmation, but stop AI loading
           }
           
           // IMMEDIATELY stop if verification failed
           if (data.status === VerificationStatus.FAILED) {
-            console.log("❌ Verification FAILED - IMMEDIATE STOP of all loading states");
-            clearInterval(pollingInterval);
+            console.log("❌ SIMPLIFIED: Verification FAILED - IMMEDIATE STOP");
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
             setIsPollingResults(false);
             setIsRunningVerification(false);
             setIsLoadingAILogic(false);
@@ -218,18 +225,20 @@ export default function DashboardPage() {
           }
           
           // Continue polling for other states
-          console.log("🔄 Continuing polling, verification still in progress:", data.status);
+          console.log("🔄 SIMPLIFIED: Continuing polling, verification still in progress:", data.status);
         }
       } catch (error) {
-        console.error('Error in polling:', error);
-        clearInterval(pollingInterval);
+        console.error('SIMPLIFIED: Error in polling:', error);
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
         setIsPollingResults(false);
         setIsRunningVerification(false);
         setIsLoadingAILogic(false);
       }
-    }, 500); // Very fast polling for immediate response
+    }, 500); // Fast polling for immediate response
     
-    return () => clearInterval(pollingInterval);
   }, [toast]);
 
   const handleSaveCode = async () => {
@@ -458,10 +467,16 @@ export default function DashboardPage() {
   };
 
   const handleStartVerification = async (level: string) => {
-    // Force stop any existing states first
+    // SIMPLIFIED: Force stop any existing states first
     setIsRunningVerification(false);
     setIsPollingResults(false);
     setIsLoadingAILogic(false);
+    
+    // Clear any existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
     
     await handleSaveCode();
     
@@ -485,7 +500,7 @@ export default function DashboardPage() {
           throw new Error("API URL not configured. Please check environment variables.");
         }
         
-        console.log("🚀 Starting deep verification with backend at:", apiUrl);
+        console.log("🚀 SIMPLIFIED: Starting deep verification with backend at:", apiUrl);
         
         // Create initial verification record with pending status
         const initialResult: Partial<VerificationResult> = {
@@ -555,7 +570,7 @@ export default function DashboardPage() {
         throw new Error("API URL not configured. Please check environment variables.");
       }
       
-      console.log("🚀 Starting simple verification with backend at:", apiUrl);
+      console.log("🚀 SIMPLIFIED: Starting simple verification with backend at:", apiUrl);
       
       // Create initial verification record
       const initialResult: Partial<VerificationResult> = {
@@ -622,7 +637,7 @@ export default function DashboardPage() {
         throw new Error("API URL not configured. Please check environment variables.");
       }
       
-      console.log("🔄 Confirming logic with backend at:", apiUrl);
+      console.log("🔄 SIMPLIFIED: Confirming logic with backend at:", apiUrl);
       
       // Update the verification result with confirmed logic and start polling again
       const { error } = await supabase
@@ -720,7 +735,13 @@ export default function DashboardPage() {
     if (!verificationId) return;
     
     try {
-      console.log(`Cancelling verification with ID: ${verificationId}`);
+      console.log(`SIMPLIFIED: Cancelling verification with ID: ${verificationId}`);
+      
+      // Clear polling first
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
       
       // Update the verification result status in database
       const { error } = await supabase
@@ -812,45 +833,16 @@ export default function DashboardPage() {
     }
   }, [activeProject]);
 
-  // CRITICAL: Enhanced effect to handle verification result state changes with IMMEDIATE response
-  useEffect(() => {
-    if (!verificationResult) return;
-    
-    console.log("🔍 ENHANCED verification result state changed:", {
-      status: verificationResult.status,
-      hasSpecDraft: !!verificationResult.spec_draft,
-      hasResults: !!(verificationResult.results && verificationResult.results.length > 0),
-      currentStates: {
-        isRunningVerification,
-        isLoadingAILogic,
-        isPollingResults
-      }
-    });
-    
-    // IMMEDIATE and AGGRESSIVE response to status changes
-    if (verificationResult.status === VerificationStatus.COMPLETED) {
-      console.log("✅ IMMEDIATE & AGGRESSIVE: Verification completed - clearing ALL loading states");
-      setIsRunningVerification(false);
-      setIsLoadingAILogic(false);
-      setIsPollingResults(false);
-    }
-    
-    if (verificationResult.status === VerificationStatus.AWAITING_CONFIRMATION && verificationResult.spec_draft) {
-      console.log("📝 IMMEDIATE & AGGRESSIVE: Logic is ready for confirmation");
-      setIsLoadingAILogic(false);
-    }
-    
-    if (verificationResult.status === VerificationStatus.FAILED) {
-      console.log("❌ IMMEDIATE & AGGRESSIVE: Verification failed - clearing ALL loading states");
-      setIsRunningVerification(false);
-      setIsLoadingAILogic(false);
-      setIsPollingResults(false);
-    }
-  }, [verificationResult?.status, verificationResult?.spec_draft, verificationResult?.results]);
+  // SIMPLIFIED: Remove complex verification result tracking effects
+  // The polling function now handles all state updates directly
 
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
       setIsPollingResults(false);
     };
   }, []);

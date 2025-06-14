@@ -1,3 +1,4 @@
+
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { VerificationIssuesList } from "@/components/verification/VerificationIssuesList";
@@ -64,47 +65,19 @@ export function VerificationPanel({
   const [backendConnected, setBackendConnected] = useState<boolean>(true);
   const [showNewVerification, setShowNewVerification] = useState<boolean>(false);
   const { toast } = useToast();
-  
-  // CRITICAL: Add a force refresh mechanism to break loading loops
-  const [forceRefreshCounter, setForceRefreshCounter] = useState(0);
-  const [lastVerificationResultId, setLastVerificationResultId] = useState<string | null>(null);
-  
-  // Track verification result changes and force state updates
-  useEffect(() => {
-    if (verificationResult?.id && verificationResult.id !== lastVerificationResultId) {
-      console.log("🆕 New verification result detected:", {
-        id: verificationResult.id,
-        status: verificationResult.status,
-        hasResults: !!(verificationResult.results && verificationResult.results.length > 0),
-        hasSpecDraft: !!verificationResult.spec_draft
-      });
-      
-      setLastVerificationResultId(verificationResult.id);
-      setForceRefreshCounter(prev => prev + 1);
-    }
-  }, [verificationResult?.id, lastVerificationResultId]);
-  
-  // AGGRESSIVE: Force refresh every 2 seconds to prevent stuck states
-  useEffect(() => {
-    const aggressiveRefresh = setInterval(() => {
-      if (verificationResult) {
-        console.log("🔄 Aggressive state check:", {
-          status: verificationResult.status,
-          hasResults: !!(verificationResult.results && verificationResult.results.length > 0),
-          hasSpecDraft: !!verificationResult.spec_draft,
-          isRunningVerification,
-          isLoadingAILogic,
-          isPollingResults,
-          timestamp: new Date().toISOString()
-        });
-        
-        // Force a counter increment to trigger re-evaluation
-        setForceRefreshCounter(prev => prev + 1);
-      }
-    }, 2000);
-    
-    return () => clearInterval(aggressiveRefresh);
-  }, [verificationResult, isRunningVerification, isLoadingAILogic, isPollingResults]);
+
+  // SIMPLIFIED STATE LOGIC - No more complex polling or force refresh
+  console.log("VerificationPanel SIMPLIFIED state:", {
+    verificationResult: !!verificationResult,
+    status: verificationResult?.status,
+    hasSpecDraft: !!verificationResult?.spec_draft,
+    hasResults: !!(verificationResult?.results && verificationResult.results.length > 0),
+    isPollingResults,
+    isRunningVerification,
+    isLoadingAILogic,
+    showNewVerification,
+    backendConnected
+  });
 
   useEffect(() => {
     // Check backend connection
@@ -173,55 +146,6 @@ export function VerificationPanel({
   }, [activeTab]);
 
   const issues = verificationResult?.results || [];
-  
-  // ENHANCED state determination with force refresh consideration
-  console.log("VerificationPanel state analysis (refresh #" + forceRefreshCounter + "):", {
-    verificationResult: !!verificationResult,
-    status: verificationResult?.status,
-    hasSpecDraft: !!verificationResult?.spec_draft,
-    hasResults: !!(verificationResult?.results && verificationResult.results.length > 0),
-    isPollingResults,
-    isRunningVerification,
-    isLoadingAILogic,
-    showNewVerification,
-    backendConnected
-  });
-
-  // CRITICAL: More aggressive determination of what to show
-  const shouldShowLogicValidation = (
-    verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION && 
-    !!verificationResult?.spec_draft &&
-    !showNewVerification
-  );
-  
-  const shouldShowCompletedResults = (
-    verificationResult?.status === VerificationStatus.COMPLETED && 
-    !!verificationResult?.results?.length &&
-    !showNewVerification &&
-    !shouldShowLogicValidation
-  );
-  
-  // CRITICAL: Much stricter loading conditions
-  const shouldShowLoading = (
-    !shouldShowLogicValidation &&
-    !shouldShowCompletedResults &&
-    !showNewVerification &&
-    backendConnected &&
-    (
-      verificationResult?.status === VerificationStatus.PENDING || 
-      verificationResult?.status === VerificationStatus.RUNNING ||
-      (isRunningVerification && !verificationResult?.results?.length && !verificationResult?.spec_draft) ||
-      (isLoadingAILogic && !verificationResult?.spec_draft) ||
-      (isPollingResults && verificationResult?.status !== VerificationStatus.COMPLETED && verificationResult?.status !== VerificationStatus.FAILED)
-    )
-  );
-  
-  const shouldShowFailed = (
-    verificationResult?.status === VerificationStatus.FAILED &&
-    !showNewVerification &&
-    !shouldShowLogicValidation &&
-    !shouldShowCompletedResults
-  );
 
   const handleConfirmLogic = async (logicText: string) => {
     if (onConfirmLogicVerification) {
@@ -263,12 +187,12 @@ export function VerificationPanel({
   };
 
   const handleStartNewVerification = () => {
-    console.log("Start New Verification button clicked");
+    console.log("Start New Verification button clicked - SIMPLIFIED");
     setShowNewVerification(true);
   };
 
   const handleCancelNewVerification = () => {
-    console.log("Cancel New Verification");
+    console.log("Cancel New Verification - SIMPLIFIED");
     setShowNewVerification(false);
   };
 
@@ -276,14 +200,13 @@ export function VerificationPanel({
   const [activeResultTab, setActiveResultTab] = useState<string>("issues");
 
   const renderVerificationContent = () => {
-    console.log("Rendering verification content with ENHANCED priority checks:", {
+    console.log("SIMPLIFIED rendering logic:", {
       backendConnected,
-      shouldShowLogicValidation,
-      shouldShowCompletedResults,
-      shouldShowLoading,
-      shouldShowFailed,
       showNewVerification,
-      forceRefreshCounter
+      verificationStatus: verificationResult?.status,
+      hasSpecDraft: !!verificationResult?.spec_draft,
+      hasResults: !!(verificationResult?.results && verificationResult.results.length > 0),
+      isActivelyRunning: isRunningVerification || isLoadingAILogic || isPollingResults
     });
 
     // PRIORITY 1: Backend connection check
@@ -298,7 +221,7 @@ export function VerificationPanel({
     
     // PRIORITY 2: Show new verification form if requested
     if (showNewVerification) {
-      console.log("✅ Showing new verification form");
+      console.log("✅ SIMPLIFIED: Showing new verification form");
       return (
         <VerificationFormNew
           verificationLevel={verificationLevel}
@@ -310,9 +233,26 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 3: Show logic validation when awaiting confirmation with spec_draft
-    if (shouldShowLogicValidation) {
-      console.log("✅ Showing logic validation");
+    // PRIORITY 3: Show loading ONLY when actively running AND no results/spec_draft yet
+    if ((isRunningVerification || isLoadingAILogic || isPollingResults) && 
+        (!verificationResult || 
+         (verificationResult.status === VerificationStatus.PENDING || 
+          verificationResult.status === VerificationStatus.RUNNING)) &&
+        !verificationResult?.spec_draft && 
+        (!verificationResult?.results || verificationResult.results.length === 0)) {
+      console.log("✅ SIMPLIFIED: Showing loading state");
+      return (
+        <VerificationLoading
+          verificationLevel={verificationLevel}
+          onCancel={handleCancelVerification}
+        />
+      );
+    }
+    
+    // PRIORITY 4: Show logic validation when spec_draft is available
+    if (verificationResult?.spec_draft && 
+        verificationResult.status === VerificationStatus.AWAITING_CONFIRMATION) {
+      console.log("✅ SIMPLIFIED: Showing logic validation");
       return (
         <LogicValidation 
           project_id={project?.id || ''}
@@ -325,9 +265,10 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 4: Show completed verification with results
-    if (shouldShowCompletedResults) {
-      console.log("✅ Showing completed verification results");
+    // PRIORITY 5: Show completed verification with results
+    if (verificationResult?.status === VerificationStatus.COMPLETED && 
+        verificationResult.results && verificationResult.results.length > 0) {
+      console.log("✅ SIMPLIFIED: Showing completed verification results");
       return (
         <VerificationCompleted 
           verificationResult={verificationResult}
@@ -340,20 +281,9 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 5: Show loading states (with much stricter conditions)
-    if (shouldShowLoading) {
-      console.log("✅ Showing loading state (with enhanced conditions)");
-      return (
-        <VerificationLoading
-          verificationLevel={verificationLevel}
-          onCancel={handleCancelVerification}
-        />
-      );
-    }
-    
     // PRIORITY 6: Show failed state
-    if (shouldShowFailed) {
-      console.log("✅ Showing failed state");
+    if (verificationResult?.status === VerificationStatus.FAILED) {
+      console.log("✅ SIMPLIFIED: Showing failed state");
       return (
         <VerificationFailed 
           onRetry={handleStartNewVerification}
@@ -362,9 +292,9 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 7: Show empty state for projects without verification history
+    // PRIORITY 7: Show empty state for projects without verification history OR show latest results
     if (!verificationResult) {
-      console.log("✅ Showing empty state");
+      console.log("✅ SIMPLIFIED: Showing empty state (no verification history)");
       return (
         <VerificationEmpty 
           verificationLevel={verificationLevel}
@@ -375,10 +305,30 @@ export function VerificationPanel({
       );
     }
     
+    // PRIORITY 8: Show latest verification results if available
+    if (verificationResult && verificationResult.results && verificationResult.results.length > 0) {
+      console.log("✅ SIMPLIFIED: Showing latest verification results");
+      return (
+        <VerificationCompleted 
+          verificationResult={verificationResult}
+          issues={issues}
+          activeResultTab={activeResultTab}
+          setActiveResultTab={setActiveResultTab}
+          onStartNewVerification={handleStartNewVerification}
+          onNavigateToLine={onNavigateToLine}
+        />
+      );
+    }
+    
     // FALLBACK: Show start new verification button
-    console.log("⚠️ Showing fallback start new verification button");
+    console.log("⚠️ SIMPLIFIED: Showing fallback start new verification button");
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
+        <ShieldCheck className="h-16 w-16 text-muted-foreground mb-4" />
+        <h3 className="text-xl font-semibold mb-2">Ready to Verify</h3>
+        <p className="text-muted-foreground text-center max-w-md mb-6">
+          Start a new verification to analyze your smart contract.
+        </p>
         <Button
           onClick={handleStartNewVerification}
           className="gap-1.5"
