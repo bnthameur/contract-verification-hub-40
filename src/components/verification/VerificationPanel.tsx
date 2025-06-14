@@ -1,3 +1,4 @@
+
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { VerificationIssuesList } from "@/components/verification/VerificationIssuesList";
@@ -133,8 +134,8 @@ export function VerificationPanel({
 
   const issues = verificationResult?.results || [];
   
-  // Enhanced state determination with better logging
-  console.log("VerificationPanel state check:", {
+  // Clear state determination with better logic
+  console.log("VerificationPanel state analysis:", {
     verificationResult: !!verificationResult,
     status: verificationResult?.status,
     hasSpecDraft: !!verificationResult?.spec_draft,
@@ -142,30 +143,21 @@ export function VerificationPanel({
     isPollingResults,
     isRunningVerification,
     isLoadingAILogic,
-    specDraftLength: verificationResult?.spec_draft?.length || 0,
-    resultsCount: verificationResult?.results?.length || 0,
-    showNewVerification
+    showNewVerification,
+    backendConnected
   });
 
-  // Clear state conditions
-  const isPending = verificationResult?.status === VerificationStatus.PENDING;
-  const isRunning = verificationResult?.status === VerificationStatus.RUNNING;
-  const isAwaitingConfirmation = verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION;
-  const isCompleted = verificationResult?.status === VerificationStatus.COMPLETED;
-  const isFailed = verificationResult?.status === VerificationStatus.FAILED;
-  
-  // State priority conditions
-  const shouldShowLogicValidation = isAwaitingConfirmation && !!verificationResult?.spec_draft;
-  const shouldShowResults = isCompleted && !!verificationResult?.results?.length;
-  const shouldShowLoading = (isPending || isRunning) && !shouldShowLogicValidation && !shouldShowResults;
-  
-  console.log("State decisions:", {
-    shouldShowLogicValidation,
-    shouldShowResults,
-    shouldShowLoading,
-    isFailed,
-    showNewVerification
-  });
+  // Determine what content to show based on verification state
+  const shouldShowLogicValidation = verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION && !!verificationResult?.spec_draft;
+  const shouldShowCompletedResults = verificationResult?.status === VerificationStatus.COMPLETED && !!verificationResult?.results?.length;
+  const shouldShowLoading = (
+    verificationResult?.status === VerificationStatus.PENDING || 
+    verificationResult?.status === VerificationStatus.RUNNING ||
+    isRunningVerification ||
+    isLoadingAILogic ||
+    isPollingResults
+  ) && !shouldShowLogicValidation && !shouldShowCompletedResults;
+  const shouldShowFailed = verificationResult?.status === VerificationStatus.FAILED;
 
   const handleConfirmLogic = async (logicText: string) => {
     if (onConfirmLogicVerification) {
@@ -206,21 +198,30 @@ export function VerificationPanel({
     }
   };
 
+  const handleStartNewVerification = () => {
+    console.log("Start New Verification button clicked");
+    setShowNewVerification(true);
+  };
+
+  const handleCancelNewVerification = () => {
+    console.log("Cancel New Verification");
+    setShowNewVerification(false);
+  };
+
   // Tab state for completed verification views
   const [activeResultTab, setActiveResultTab] = useState<string>("issues");
 
   const renderVerificationContent = () => {
-    console.log("Rendering verification content with states:", {
+    console.log("Rendering verification content with priority checks:", {
       backendConnected,
       shouldShowLogicValidation,
-      shouldShowResults,
+      shouldShowCompletedResults,
       shouldShowLoading,
-      isFailed,
-      showNewVerification,
-      verificationStatus: verificationResult?.status
+      shouldShowFailed,
+      showNewVerification
     });
 
-    // Show backend connection warning
+    // PRIORITY 1: Backend connection check
     if (!backendConnected) {
       return (
         <VerificationConnectionError 
@@ -230,7 +231,21 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 1: Show logic validation when awaiting confirmation with spec_draft
+    // PRIORITY 2: Show new verification form if requested
+    if (showNewVerification) {
+      console.log("✅ Showing new verification form");
+      return (
+        <VerificationFormNew
+          verificationLevel={verificationLevel}
+          onVerificationLevelChange={setVerificationLevel}
+          onCancel={handleCancelNewVerification}
+          onVerify={handleVerify}
+          isDisabled={!project || !verificationLevel}
+        />
+      );
+    }
+    
+    // PRIORITY 3: Show logic validation when awaiting confirmation with spec_draft
     if (shouldShowLogicValidation) {
       console.log("✅ Showing logic validation");
       return (
@@ -245,8 +260,8 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 2: Show completed verification with results
-    if (shouldShowResults) {
+    // PRIORITY 4: Show completed verification with results
+    if (shouldShowCompletedResults) {
       console.log("✅ Showing completed verification results");
       return (
         <VerificationCompleted 
@@ -254,13 +269,13 @@ export function VerificationPanel({
           issues={issues}
           activeResultTab={activeResultTab}
           setActiveResultTab={setActiveResultTab}
-          onStartNewVerification={() => setShowNewVerification(true)}
+          onStartNewVerification={handleStartNewVerification}
           onNavigateToLine={onNavigateToLine}
         />
       );
     }
     
-    // PRIORITY 3: Show loading states
+    // PRIORITY 5: Show loading states
     if (shouldShowLoading) {
       console.log("✅ Showing loading state");
       return (
@@ -271,32 +286,18 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 4: Show failed state
-    if (isFailed) {
+    // PRIORITY 6: Show failed state
+    if (shouldShowFailed) {
       console.log("✅ Showing failed state");
       return (
         <VerificationFailed 
-          onRetry={() => setShowNewVerification(true)}
+          onRetry={handleStartNewVerification}
           errorMessage={verificationResult?.error_message}
         />
       );
     }
     
-    // PRIORITY 5: Show new verification form if button was clicked
-    if (showNewVerification) {
-      console.log("✅ Showing new verification form");
-      return (
-        <VerificationFormNew
-          verificationLevel={verificationLevel}
-          onVerificationLevelChange={setVerificationLevel}
-          onCancel={() => setShowNewVerification(false)}
-          onVerify={handleVerify}
-          isDisabled={!project || !verificationLevel}
-        />
-      );
-    }
-    
-    // PRIORITY 6: Show empty state for projects without verification history
+    // PRIORITY 7: Show empty state for projects without verification history
     if (!verificationResult) {
       console.log("✅ Showing empty state");
       return (
@@ -309,12 +310,12 @@ export function VerificationPanel({
       );
     }
     
-    // Default fallback - show start new verification
-    console.log("⚠️ Showing default start new verification button");
+    // FALLBACK: Show start new verification button
+    console.log("⚠️ Showing fallback start new verification button");
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
         <Button
-          onClick={() => setShowNewVerification(true)}
+          onClick={handleStartNewVerification}
           className="gap-1.5"
         >
           <RefreshCw className="h-4 w-4" />
