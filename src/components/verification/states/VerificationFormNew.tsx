@@ -24,6 +24,16 @@ export function VerificationFormNew({
   onCancel,
   isDisabled
 }: VerificationFormNewProps) {
+  
+  const handleVerify = async () => {
+    console.log("VerificationFormNew: Starting verification with level:", verificationLevel);
+    try {
+      await onVerify(verificationLevel);
+    } catch (error) {
+      console.error("VerificationFormNew: Error starting verification:", error);
+    }
+  };
+
   return (
     <div className="flex flex-col items-center justify-center h-full p-6">
       <ShieldCheck className="h-16 w-16 text-muted-foreground mb-4" />
@@ -61,8 +71,8 @@ export function VerificationFormNew({
             Cancel
           </Button>
           <Button
-            onClick={() => onVerify(verificationLevel)}
-            disabled={isDisabled}
+            onClick={handleVerify}
+            disabled={isDisabled || !verificationLevel}
             className="flex-1"
           >
             Start Verification

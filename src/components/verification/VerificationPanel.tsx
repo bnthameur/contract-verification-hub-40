@@ -134,7 +134,7 @@ export function VerificationPanel({
   const issues = verificationResult?.results || [];
   
   // Enhanced state determination with better logging
-  console.log("VerificationPanel enhanced state check:", {
+  console.log("VerificationPanel state check:", {
     verificationResult: !!verificationResult,
     status: verificationResult?.status,
     hasSpecDraft: !!verificationResult?.spec_draft,
@@ -143,27 +143,28 @@ export function VerificationPanel({
     isRunningVerification,
     isLoadingAILogic,
     specDraftLength: verificationResult?.spec_draft?.length || 0,
-    resultsCount: verificationResult?.results?.length || 0
+    resultsCount: verificationResult?.results?.length || 0,
+    showNewVerification
   });
 
+  // Clear state conditions
   const isPending = verificationResult?.status === VerificationStatus.PENDING;
   const isRunning = verificationResult?.status === VerificationStatus.RUNNING;
   const isAwaitingConfirmation = verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION;
   const isCompleted = verificationResult?.status === VerificationStatus.COMPLETED;
   const isFailed = verificationResult?.status === VerificationStatus.FAILED;
   
-  // More precise conditions for each state
-  const shouldShowLoadingForPending = isPending && !verificationResult?.spec_draft;
-  const shouldShowLoadingForRunning = isRunning && !verificationResult?.results?.length;
+  // State priority conditions
   const shouldShowLogicValidation = isAwaitingConfirmation && !!verificationResult?.spec_draft;
   const shouldShowResults = isCompleted && !!verificationResult?.results?.length;
+  const shouldShowLoading = (isPending || isRunning) && !shouldShowLogicValidation && !shouldShowResults;
   
   console.log("State decisions:", {
-    shouldShowLoadingForPending,
-    shouldShowLoadingForRunning,
     shouldShowLogicValidation,
     shouldShowResults,
-    isFailed
+    shouldShowLoading,
+    isFailed,
+    showNewVerification
   });
 
   const handleConfirmLogic = async (logicText: string) => {
@@ -175,6 +176,7 @@ export function VerificationPanel({
   const handleVerify = async (level: string) => {
     if (!project) return;
     try {
+      console.log("Starting verification with level:", level);
       await onStartVerification(level);
       setShowNewVerification(false);
     } catch (error: any) {
@@ -210,15 +212,12 @@ export function VerificationPanel({
   const renderVerificationContent = () => {
     console.log("Rendering verification content with states:", {
       backendConnected,
-      shouldShowLoadingForPending,
-      shouldShowLoadingForRunning,
       shouldShowLogicValidation,
       shouldShowResults,
+      shouldShowLoading,
       isFailed,
       showNewVerification,
-      verificationStatus: verificationResult?.status,
-      hasSpecDraft: !!verificationResult?.spec_draft,
-      hasResults: !!(verificationResult?.results && verificationResult.results.length > 0)
+      verificationStatus: verificationResult?.status
     });
 
     // Show backend connection warning
@@ -233,13 +232,13 @@ export function VerificationPanel({
     
     // PRIORITY 1: Show logic validation when awaiting confirmation with spec_draft
     if (shouldShowLogicValidation) {
-      console.log("✅ Showing logic validation with spec_draft");
+      console.log("✅ Showing logic validation");
       return (
         <LogicValidation 
           project_id={project?.id || ''}
           code={project?.code || ''}
           result={verificationResult}
-          onConfirmLogic={(logicText) => onConfirmLogicVerification && onConfirmLogicVerification(logicText)}
+          onConfirmLogic={handleConfirmLogic}
           onCancel={() => onCancelLogicValidation && onCancelLogicValidation()}
           isLoadingAILogic={isLoadingAILogic}
         />
@@ -262,7 +261,7 @@ export function VerificationPanel({
     }
     
     // PRIORITY 3: Show loading states
-    if (shouldShowLoadingForPending || shouldShowLoadingForRunning) {
+    if (shouldShowLoading) {
       console.log("✅ Showing loading state");
       return (
         <VerificationLoading
@@ -310,7 +309,7 @@ export function VerificationPanel({
       );
     }
     
-    // Default fallback - this should rarely be reached
+    // Default fallback - show start new verification
     console.log("⚠️ Showing default start new verification button");
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
