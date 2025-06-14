@@ -1,3 +1,4 @@
+
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { VerificationIssuesList } from "@/components/verification/VerificationIssuesList";
@@ -132,11 +133,19 @@ export function VerificationPanel({
   }, [activeTab]);
 
   const issues = verificationResult?.results || [];
-  const isVerifying = isRunningVerification || isPollingResults;
-  const isCompleted = verificationResult?.status === VerificationStatus.COMPLETED;
+  
+  // Determine current state more precisely
   const isPending = verificationResult?.status === VerificationStatus.PENDING;
+  const isRunning = verificationResult?.status === VerificationStatus.RUNNING;
   const isAwaitingConfirmation = verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION;
+  const isCompleted = verificationResult?.status === VerificationStatus.COMPLETED;
   const isFailed = verificationResult?.status === VerificationStatus.FAILED;
+  
+  // Check if we should show loading screen
+  const shouldShowLoading = (isPending || isRunning) && !isAwaitingConfirmation;
+  
+  // Check if we should show logic validation
+  const shouldShowLogicValidation = isAwaitingConfirmation && verificationResult?.spec_draft;
   
   const handleConfirmLogic = async (logicText: string) => {
     if (onConfirmLogicVerification) {
@@ -179,15 +188,18 @@ export function VerificationPanel({
   // Tab state for completed verification views
   const [activeResultTab, setActiveResultTab] = useState<string>("issues");
 
-  // Automatically switch to logic validation when spec_draft is available
-  useEffect(() => {
-    if (verificationResult?.status === VerificationStatus.AWAITING_CONFIRMATION && 
-        verificationResult?.spec_draft) {
-      setActiveResultTab("logic");
-    }
-  }, [verificationResult]);
-
   const renderVerificationContent = () => {
+    console.log("Rendering verification content:", {
+      backendConnected,
+      shouldShowLoading,
+      shouldShowLogicValidation,
+      isCompleted,
+      isFailed,
+      showNewVerification,
+      verificationStatus: verificationResult?.status,
+      hasSpecDraft: !!verificationResult?.spec_draft
+    });
+
     // Show backend connection warning
     if (!backendConnected) {
       return (
@@ -198,8 +210,8 @@ export function VerificationPanel({
       );
     }
     
-    // Show loading state
-    if (isVerifying || isLoadingAILogic) {
+    // Show loading state for pending/running (but not awaiting confirmation)
+    if (shouldShowLoading) {
       return (
         <VerificationLoading
           verificationLevel={verificationLevel}
@@ -208,8 +220,8 @@ export function VerificationPanel({
       );
     }
     
-    // Show awaiting confirmation (for deep verification)
-    if (isAwaitingConfirmation && verificationResult && verificationResult.spec_draft) {
+    // Show logic validation when awaiting confirmation with spec_draft
+    if (shouldShowLogicValidation) {
       return (
         <LogicValidation 
           project_id={project?.id || ''}
@@ -217,7 +229,7 @@ export function VerificationPanel({
           result={verificationResult}
           onConfirmLogic={handleConfirmLogic}
           onCancel={() => onCancelLogicValidation && onCancelLogicValidation()}
-          isLoadingAILogic={isLoadingAILogic}
+          isLoadingAILogic={false}
         />
       );
     }
@@ -236,7 +248,7 @@ export function VerificationPanel({
     }
     
     // Show completed verification with results
-    if (isCompleted && verificationResult) {
+    if (isCompleted) {
       return (
         <VerificationCompleted 
           verificationResult={verificationResult}

@@ -105,10 +105,14 @@ export default function DashboardPage() {
     }
   };
 
-  // Polling function for verification results
+  // Polling function for verification results - FIXED to handle all states properly
   const startPolling = useCallback((projectId: string, resultId: string) => {
+    console.log("Starting polling for verification:", resultId);
+    
     const pollingInterval = setInterval(async () => {
       try {
+        console.log("Polling verification result:", resultId);
+        
         const { data, error } = await supabase
           .from('verification_results')
           .select('*')
@@ -123,12 +127,19 @@ export default function DashboardPage() {
         }
         
         if (data) {
+          console.log("Polling received data:", data);
           setVerificationResult(data);
           
-          // If status is no longer running, stop polling
-          if (data.status !== VerificationStatus.RUNNING && data.status !== VerificationStatus.PENDING) {
+          // Stop polling only when verification is truly finished (completed or failed)
+          // Keep polling for PENDING, RUNNING, and AWAITING_CONFIRMATION
+          if (data.status === VerificationStatus.COMPLETED || data.status === VerificationStatus.FAILED) {
+            console.log("Verification finished, stopping polling:", data.status);
             clearInterval(pollingInterval);
             setIsPollingResults(false);
+            setIsRunningVerification(false);
+            setIsLoadingAILogic(false);
+          } else {
+            console.log("Verification still in progress:", data.status);
           }
         }
       } catch (error) {
@@ -136,7 +147,7 @@ export default function DashboardPage() {
         clearInterval(pollingInterval);
         setIsPollingResults(false);
       }
-    }, 3000);
+    }, 2000); // Poll every 2 seconds for more responsive updates
     
     return () => clearInterval(pollingInterval);
   }, []);
@@ -375,7 +386,6 @@ const handleStartVerification = async (level: string) => {
   setIsRunningVerification(true);
   
   if (level === VerificationLevel.DEEP) {
-    setActiveVerificationTab("verification"); // First show the verification panel with loading
     setIsLoadingAILogic(true);
     
     try {
@@ -413,8 +423,11 @@ const handleStartVerification = async (level: string) => {
       
       setVerificationResult(verificationRecord);
       
+      // Start polling immediately after creating the record
+      setIsPollingResults(true);
+      startPolling(activeProject.id, verificationRecord.id);
+      
       // Now make actual API call to backend
-      // Changed from /generate_logic to /verify/deep to match backend
       const response = await fetch(`${apiUrl}/verify/deep`, {
         method: 'POST',
         headers: {
@@ -434,9 +447,8 @@ const handleStartVerification = async (level: string) => {
       const responseData = await response.json();
       console.log("Deep verification response:", responseData);
       
-      // Start polling for results
-      setIsPollingResults(true);
-      startPolling(activeProject.id, verificationRecord.id);
+      // Polling is already started, just turn off local loading
+      setIsLoadingAILogic(false);
       
     } catch (error) {
       console.error("Error in deep verification:", error);
@@ -460,14 +472,13 @@ const handleStartVerification = async (level: string) => {
       
       setIsLoadingAILogic(false);
       setIsRunningVerification(false);
+      setIsPollingResults(false);
     }
     
     return;
   }
   
   // Simple verification flow
-  setActiveVerificationTab("verification");
-  
   try {
     const apiUrl = import.meta.env.VITE_API_URL;
     if (!apiUrl) {
@@ -497,7 +508,9 @@ const handleStartVerification = async (level: string) => {
     setVerificationResult(verificationRecord);
     setIsPollingResults(true);
     
-    // Changed from /verify to /verify/simple to match backend
+    // Start polling immediately
+    startPolling(activeProject.id, verificationRecord.id);
+    
     const response = await fetch(`${apiUrl}/verify/simple`, {
       method: 'POST',
       headers: {
@@ -516,9 +529,6 @@ const handleStartVerification = async (level: string) => {
     
     const responseData = await response.json();
     console.log("Simple verification response:", responseData);
-    
-    // Start polling for results
-    startPolling(activeProject.id, verificationRecord.id);
     
   } catch (error) {
     console.error("Error starting verification:", error);
