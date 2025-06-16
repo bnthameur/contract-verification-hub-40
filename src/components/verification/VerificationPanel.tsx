@@ -1,4 +1,3 @@
-
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { VerificationIssuesList } from "@/components/verification/VerificationIssuesList";
@@ -62,12 +61,12 @@ export function VerificationPanel({
     backendConnected
   });
 
-  // Add transition effect when verification state changes
+  // Reduced transition effect when verification state changes
   useEffect(() => {
     setIsTransitioning(true);
     const timer = setTimeout(() => {
       setIsTransitioning(false);
-    }, 200);
+    }, 50); // Reduced from 200ms to 50ms
     
     return () => clearTimeout(timer);
   }, [verificationResult?.status, showNewVerification]);
@@ -178,14 +177,11 @@ export function VerificationPanel({
       isActivelyRunning: isRunningVerification
     });
 
-    // Show loading overlay during transitions
+    // Show minimal loading overlay during transitions
     if (isTransitioning) {
       return (
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center">
-            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Loading...</p>
-          </div>
+        <div className="flex items-center justify-center h-full bg-background/80">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         </div>
       );
     }
