@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,7 @@ import {
   Network, 
   Wallet, 
   Settings, 
-  Gas, 
+  Fuel, 
   DollarSign,
   Copy,
   ExternalLink,
@@ -236,7 +235,7 @@ export function DeploymentPanel({ contractCode, contractName = 'Contract' }: Dep
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Gas className="h-5 w-5" />
+            <Fuel className="h-5 w-5" />
             Deployment Configuration
           </CardTitle>
         </CardHeader>
