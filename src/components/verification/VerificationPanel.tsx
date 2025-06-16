@@ -1,9 +1,10 @@
+
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
 import { VerificationIssuesList } from "@/components/verification/VerificationIssuesList";
 import { Button } from "@/components/ui/button";
 import { Project, VerificationResult, VerificationStatus, VerificationLevel } from "@/types";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { LogicValidation } from "@/components/verification/LogicValidation";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -46,7 +47,6 @@ export function VerificationPanel({
   const [verificationLevel, setVerificationLevel] = useState<string>("simple");
   const [backendConnected, setBackendConnected] = useState<boolean>(true);
   const [showNewVerification, setShowNewVerification] = useState<boolean>(false);
-  const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
   const { toast } = useToast();
 
   console.log("VerificationPanel state:", {
@@ -60,16 +60,6 @@ export function VerificationPanel({
     showNewVerification,
     backendConnected
   });
-
-  // Reduced transition effect when verification state changes
-  useEffect(() => {
-    setIsTransitioning(true);
-    const timer = setTimeout(() => {
-      setIsTransitioning(false);
-    }, 50); // Reduced from 200ms to 50ms
-    
-    return () => clearTimeout(timer);
-  }, [verificationResult?.status, showNewVerification]);
 
   useEffect(() => {
     const checkBackend = async () => {
@@ -167,8 +157,9 @@ export function VerificationPanel({
 
   const [activeResultTab, setActiveResultTab] = useState<string>("issues");
 
-  const renderVerificationContent = () => {
-    console.log("Rendering verification content:", {
+  // Memoize the content to prevent unnecessary re-renders
+  const verificationContent = useMemo(() => {
+    console.log("Computing verification content:", {
       backendConnected,
       showNewVerification,
       verificationStatus: verificationResult?.status,
@@ -176,15 +167,6 @@ export function VerificationPanel({
       hasResults: !!(verificationResult?.results && verificationResult.results.length > 0),
       isActivelyRunning: isRunningVerification
     });
-
-    // Show minimal loading overlay during transitions
-    if (isTransitioning) {
-      return (
-        <div className="flex items-center justify-center h-full bg-background/80">
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        </div>
-      );
-    }
 
     // Backend connection check
     if (!backendConnected) {
@@ -310,7 +292,28 @@ export function VerificationPanel({
         </Button>
       </div>
     );
-  };
+  }, [
+    backendConnected,
+    showNewVerification,
+    verificationResult?.status,
+    verificationResult?.spec_draft,
+    verificationResult?.results,
+    verificationResult?.error_message,
+    verificationResult?.id,
+    isRunningVerification,
+    isLoadingAILogic,
+    verificationLevel,
+    project,
+    issues,
+    activeResultTab,
+    handleStartNewVerification,
+    handleCancelNewVerification,
+    handleVerify,
+    handleCancelVerification,
+    handleConfirmLogic,
+    onNavigateToLine,
+    onCancelLogicValidation
+  ]);
 
   return (
     <div className="flex flex-col h-full">
@@ -332,7 +335,7 @@ export function VerificationPanel({
       </div>
 
       <div className="flex-1 p-0 overflow-hidden">
-        {renderVerificationContent()}
+        {verificationContent}
       </div>
     </div>
   );

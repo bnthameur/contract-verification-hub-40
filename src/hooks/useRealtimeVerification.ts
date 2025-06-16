@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { VerificationResult, VerificationStatus } from '@/types';
 
@@ -12,10 +12,39 @@ export function useRealtimeVerification({ projectId, onVerificationUpdate }: Use
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const subscriptionRef = useRef<any>(null);
+  const lastProjectIdRef = useRef<string | undefined>(undefined);
+  const isInitializedRef = useRef(false);
+
+  // Stable update function to prevent unnecessary re-renders
+  const updateVerificationResult = useCallback((result: VerificationResult | null) => {
+    setVerificationResult(prev => {
+      // Only update if there's actually a change
+      if (JSON.stringify(prev) === JSON.stringify(result)) {
+        return prev;
+      }
+      return result;
+    });
+    
+    // Set loading state based on verification status
+    const shouldBeLoading = result?.status === VerificationStatus.RUNNING || result?.status === VerificationStatus.PENDING;
+    setIsLoading(prev => {
+      if (prev === shouldBeLoading) return prev;
+      return shouldBeLoading;
+    });
+    
+    if (onVerificationUpdate) {
+      onVerificationUpdate(result);
+    }
+  }, [onVerificationUpdate]);
 
   // Fetch latest verification
-  const fetchLatestVerification = async () => {
-    if (!projectId) return;
+  const fetchLatestVerification = useCallback(async () => {
+    if (!projectId) {
+      if (isInitializedRef.current) {
+        updateVerificationResult(null);
+      }
+      return;
+    }
 
     try {
       const { data, error } = await supabase
@@ -28,72 +57,68 @@ export function useRealtimeVerification({ projectId, onVerificationUpdate }: Use
       if (error) throw error;
 
       const result = data?.[0] || null;
-      setVerificationResult(result);
-      
-      // Set loading state based on verification status
-      setIsLoading(result?.status === VerificationStatus.RUNNING || result?.status === VerificationStatus.PENDING);
-      
-      if (onVerificationUpdate) {
-        onVerificationUpdate(result);
-      }
+      updateVerificationResult(result);
+      isInitializedRef.current = true;
     } catch (error) {
       console.error('Error fetching verification:', error);
-      setVerificationResult(null);
-      setIsLoading(false);
+      updateVerificationResult(null);
+      isInitializedRef.current = true;
     }
-  };
+  }, [projectId, updateVerificationResult]);
 
   // Setup real-time subscription
   useEffect(() => {
-    if (!projectId) return;
+    // Clean up previous subscription if project changed
+    if (subscriptionRef.current && lastProjectIdRef.current !== projectId) {
+      supabase.removeChannel(subscriptionRef.current);
+      subscriptionRef.current = null;
+    }
 
-    // Initial fetch
-    fetchLatestVerification();
+    if (!projectId) {
+      lastProjectIdRef.current = undefined;
+      return;
+    }
 
-    // Setup real-time subscription
-    subscriptionRef.current = supabase
-      .channel('verification_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'verification_results',
-          filter: `project_id=eq.${projectId}`
-        },
-        (payload) => {
-          console.log('Real-time verification update:', payload);
-          
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            const newResult = payload.new as VerificationResult;
-            setVerificationResult(newResult);
+    // Only fetch if project actually changed or first time
+    if (lastProjectIdRef.current !== projectId) {
+      isInitializedRef.current = false;
+      fetchLatestVerification();
+      lastProjectIdRef.current = projectId;
+    }
+
+    // Setup real-time subscription only if we don't have one for this project
+    if (!subscriptionRef.current || lastProjectIdRef.current !== projectId) {
+      subscriptionRef.current = supabase
+        .channel(`verification_changes_${projectId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'verification_results',
+            filter: `project_id=eq.${projectId}`
+          },
+          (payload) => {
+            console.log('Real-time verification update:', payload);
             
-            // Update loading state instantly
-            setIsLoading(
-              newResult.status === VerificationStatus.RUNNING || 
-              newResult.status === VerificationStatus.PENDING
-            );
-            
-            if (onVerificationUpdate) {
-              onVerificationUpdate(newResult);
-            }
-          } else if (payload.eventType === 'DELETE') {
-            setVerificationResult(null);
-            setIsLoading(false);
-            if (onVerificationUpdate) {
-              onVerificationUpdate(null);
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const newResult = payload.new as VerificationResult;
+              updateVerificationResult(newResult);
+            } else if (payload.eventType === 'DELETE') {
+              updateVerificationResult(null);
             }
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe();
+    }
 
     return () => {
       if (subscriptionRef.current) {
         supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
       }
     };
-  }, [projectId, onVerificationUpdate]);
+  }, [projectId, fetchLatestVerification, updateVerificationResult]);
 
   return {
     verificationResult,
