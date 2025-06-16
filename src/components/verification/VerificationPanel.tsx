@@ -47,6 +47,7 @@ export function VerificationPanel({
   const [verificationLevel, setVerificationLevel] = useState<string>("simple");
   const [backendConnected, setBackendConnected] = useState<boolean>(true);
   const [showNewVerification, setShowNewVerification] = useState<boolean>(false);
+  const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
   const { toast } = useToast();
 
   console.log("VerificationPanel state:", {
@@ -60,6 +61,16 @@ export function VerificationPanel({
     showNewVerification,
     backendConnected
   });
+
+  // Add transition effect when verification state changes
+  useEffect(() => {
+    setIsTransitioning(true);
+    const timer = setTimeout(() => {
+      setIsTransitioning(false);
+    }, 200);
+    
+    return () => clearTimeout(timer);
+  }, [verificationResult?.status, showNewVerification]);
 
   useEffect(() => {
     const checkBackend = async () => {
@@ -166,6 +177,18 @@ export function VerificationPanel({
       hasResults: !!(verificationResult?.results && verificationResult.results.length > 0),
       isActivelyRunning: isRunningVerification
     });
+
+    // Show loading overlay during transitions
+    if (isTransitioning) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      );
+    }
 
     // Backend connection check
     if (!backendConnected) {
