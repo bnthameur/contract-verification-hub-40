@@ -2,6 +2,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ResizableLayout } from "@/components/layout/ResizableLayout";
 import { MonacoEditor } from "@/components/editor/MonacoEditor";
+import { CvlCodeViewer } from "@/components/editor/CvlCodeViewer";
+import { DeploymentPanel } from "@/components/editor/DeploymentPanel";
 import { VerificationPanel } from "@/components/verification/VerificationPanel";
 import { LogicValidation } from "@/components/verification/LogicValidation";
 import { Project, VerificationResult, VerificationLevel, VerificationStatus } from "@/types";
@@ -14,31 +16,32 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { LightRay } from "@/components/layout/LightRay";
 import { ProjectCreationDialog } from "@/components/project/ProjectCreationDialog";
+import { useRealtimeVerification } from "@/hooks/useRealtimeVerification";
 import * as monaco from "monaco-editor";
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProject, setActiveProject] = useState<Project | undefined>();
   const [code, setCode] = useState("");
-  const [verificationResult, setVerificationResult] = useState<VerificationResult | undefined>();
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
-  const [activeVerificationTab, setActiveVerificationTab] = useState<"verification" | "logic-validation">("verification");
-  const [isLoadingAILogic, setIsLoadingAILogic] = useState(false);
-  const [isRunningVerification, setIsRunningVerification] = useState(false);
-  const [isPollingResults, setIsPollingResults] = useState(false);
+  const [activeCodeTab, setActiveCodeTab] = useState<"code" | "tests" | "deployment">("code");
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    if (user) {
-      fetchProjects();
+  // Use the new real-time verification hook
+  const {
+    verificationResult,
+    isLoading: isVerificationLoading,
+    refetch: refetchVerification
+  } = useRealtimeVerification({
+    projectId: activeProject?.id,
+    onVerificationUpdate: (result) => {
+      console.log("Real-time verification update:", result);
     }
-  }, [user]);
+  });
 
   const fetchProjects = async () => {
     if (!user) return;
@@ -64,7 +67,6 @@ export default function DashboardPage() {
         if (data.length > 0 && !activeProject) {
           setActiveProject(data[0]);
           setCode(data[0].code);
-          fetchLatestVerificationResult(data[0].id);
         }
       }
     } catch (error: any) {
@@ -76,187 +78,6 @@ export default function DashboardPage() {
       });
     }
   };
-
-  const fetchLatestVerificationResult = async (project_id: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('verification_results')
-        .select('*')
-        .eq('project_id', project_id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-        
-      if (error) throw error;
-      
-      if (data && data.length > 0) {
-        console.log("📊 FIXED: Fetched latest verification result:", {
-          id: data[0].id,
-          status: data[0].status,
-          hasResults: !!(data[0].results && data[0].results.length > 0),
-          hasSpecDraft: !!data[0].spec_draft
-        });
-        
-        setVerificationResult(data[0]);
-        
-        // AGGRESSIVE FIX: Force stop all loading states if verification is complete
-        if (data[0].status === VerificationStatus.COMPLETED || 
-            data[0].status === VerificationStatus.FAILED ||
-            (data[0].status === VerificationStatus.AWAITING_CONFIRMATION && data[0].spec_draft)) {
-          console.log("🛑 FORCE STOP: Verification is complete, stopping all loading states");
-          setIsPollingResults(false);
-          setIsRunningVerification(false);
-          setIsLoadingAILogic(false);
-          
-          // Clear any existing polling
-          if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = null;
-          }
-        } else if (data[0].status === VerificationStatus.PENDING || data[0].status === VerificationStatus.RUNNING) {
-          console.log("📊 FIXED: Starting polling for in-progress verification");
-          setIsPollingResults(true);
-          startPolling(project_id, data[0].id);
-        }
-      } else {
-        setVerificationResult(undefined);
-        setIsPollingResults(false);
-        setIsRunningVerification(false);
-        setIsLoadingAILogic(false);
-      }
-    } catch (error: any) {
-      console.error('Error fetching verification result:', error);
-      setIsPollingResults(false);
-      setIsRunningVerification(false);
-      setIsLoadingAILogic(false);
-    }
-  };
-
-  // AGGRESSIVE FIX: Enhanced polling with immediate state updates
-  const startPolling = useCallback((projectId: string, resultId: string) => {
-    console.log("🔄 FIXED POLLING: Starting aggressive polling for verification:", resultId);
-    
-    // Clear any existing polling
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-    
-    let pollAttempts = 0;
-    const maxPollAttempts = 120; // 1 minute max polling (500ms * 120 = 60 seconds)
-    
-    pollingIntervalRef.current = setInterval(async () => {
-      pollAttempts++;
-      
-      if (pollAttempts > maxPollAttempts) {
-        console.warn("⚠️ FIXED: Max polling attempts reached, FORCE STOPPING");
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-        // FORCE STOP ALL STATES
-        setIsPollingResults(false);
-        setIsRunningVerification(false);
-        setIsLoadingAILogic(false);
-        return;
-      }
-      
-      try {
-        console.log(`🔄 FIXED POLL ${pollAttempts}: Checking verification result:`, resultId);
-        
-        const { data, error } = await supabase
-          .from('verification_results')
-          .select('*')
-          .eq('id', resultId)
-          .single();
-          
-        if (error) {
-          console.error('FIXED POLLING: Error:', error);
-          if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = null;
-          }
-          // FORCE STOP ALL STATES
-          setIsPollingResults(false);
-          setIsRunningVerification(false);
-          setIsLoadingAILogic(false);
-          return;
-        }
-        
-        if (data) {
-          console.log("🔄 FIXED POLL: Received data:", {
-            id: data.id,
-            status: data.status,
-            hasSpecDraft: !!data.spec_draft,
-            hasResults: !!(data.results && data.results.length > 0),
-            resultsCount: data.results ? data.results.length : 0
-          });
-          
-          // IMMEDIATE state update
-          setVerificationResult(data);
-          
-          // AGGRESSIVE STOP CONDITIONS - Force stop immediately
-          if (data.status === VerificationStatus.COMPLETED) {
-            console.log("✅ FIXED: COMPLETED - IMMEDIATE FORCE STOP ALL STATES");
-            
-            // FORCE CLEAR POLLING FIRST
-            if (pollingIntervalRef.current) {
-              clearInterval(pollingIntervalRef.current);
-              pollingIntervalRef.current = null;
-            }
-            
-            // FORCE SET ALL STATES TO FALSE IMMEDIATELY
-            setIsPollingResults(false);
-            setIsRunningVerification(false);
-            setIsLoadingAILogic(false);
-            
-            toast({
-              title: "Verification Complete",
-              description: `Found ${data.results ? data.results.length : 0} issues`,
-            });
-            return; // STOP POLLING IMMEDIATELY
-          }
-          
-          if (data.status === VerificationStatus.AWAITING_CONFIRMATION && data.spec_draft) {
-            console.log("✅ FIXED: LOGIC READY - STOP AI LOADING IMMEDIATELY");
-            setIsLoadingAILogic(false);
-            // Keep polling for logic confirmation
-          }
-          
-          if (data.status === VerificationStatus.FAILED) {
-            console.log("❌ FIXED: FAILED - IMMEDIATE FORCE STOP ALL STATES");
-            
-            // FORCE CLEAR POLLING
-            if (pollingIntervalRef.current) {
-              clearInterval(pollingIntervalRef.current);
-              pollingIntervalRef.current = null;
-            }
-            
-            // FORCE STOP ALL STATES
-            setIsPollingResults(false);
-            setIsRunningVerification(false);
-            setIsLoadingAILogic(false);
-            return; // STOP POLLING IMMEDIATELY
-          }
-          
-          // Continue polling only for PENDING/RUNNING states
-          if (data.status === VerificationStatus.PENDING || data.status === VerificationStatus.RUNNING) {
-            console.log("🔄 FIXED: Still in progress:", data.status);
-          }
-        }
-      } catch (error) {
-        console.error('FIXED POLLING: Error in polling:', error);
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-        // FORCE STOP ALL STATES
-        setIsPollingResults(false);
-        setIsRunningVerification(false);
-        setIsLoadingAILogic(false);
-      }
-    }, 300); // Even faster polling - 300ms for immediate response
-    
-  }, [toast]);
 
   const handleSaveCode = async () => {
     if (!activeProject || !user) return;
@@ -344,7 +165,6 @@ export default function DashboardPage() {
         setActiveProject(data);
         setCode(data.code);
         setIsCreatingProject(false);
-        setVerificationResult(undefined);
         
         toast({
           title: "Project created",
@@ -433,7 +253,6 @@ export default function DashboardPage() {
             setProjects(prev => [data, ...prev]);
             setActiveProject(data);
             setCode(data.code);
-            setVerificationResult(undefined);
             
             toast({
               title: "File imported",
@@ -484,137 +303,19 @@ export default function DashboardPage() {
   };
 
   const handleStartVerification = async (level: string) => {
-    // FIXED: Force clear all states first
-    console.log("🚀 FIXED: Starting verification - clearing all states first");
-    setIsRunningVerification(false);
-    setIsPollingResults(false);
-    setIsLoadingAILogic(false);
-    
-    // Clear any existing polling immediately
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-    
     await handleSaveCode();
     
     if (!activeProject) return;
     
-    // Set running state
-    setIsRunningVerification(true);
-    
-    if (level === VerificationLevel.DEEP) {
-      setIsLoadingAILogic(true);
-      
-      try {
-        if (!activeProject) {
-          setIsLoadingAILogic(false);
-          setIsRunningVerification(false);
-          return;
-        }
-        
-        const apiUrl = import.meta.env.VITE_API_URL;
-        if (!apiUrl) {
-          throw new Error("API URL not configured. Please check environment variables.");
-        }
-        
-        console.log("🚀 FIXED: Starting deep verification with backend at:", apiUrl);
-        
-        // Create initial verification record with pending status
-        const initialResult: Partial<VerificationResult> = {
-          project_id: activeProject.id,
-          level: VerificationLevel.DEEP,
-          status: VerificationStatus.PENDING,
-          results: [],
-          logs: ["Starting deep verification process..."],
-          created_at: new Date().toISOString(),
-        };
-        
-        const { data: verificationRecord, error: insertError } = await supabase
-          .from('verification_results')
-          .insert(initialResult)
-          .select()
-          .single();
-          
-        if (insertError) throw insertError;
-        
-        setVerificationResult(verificationRecord);
-        
-        // Start polling immediately after creating the record
-        setIsPollingResults(true);
-        startPolling(activeProject.id, verificationRecord.id);
-        
-        // Now make actual API call to backend
-        const response = await fetch(`${apiUrl}/verify/deep`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            project_id: activeProject.id
-          }),
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("API error:", errorText);
-          throw new Error(`API request failed: ${response.statusText}`);
-        }
-        
-        const responseData = await response.json();
-        console.log("Deep verification response:", responseData);
-        
-      } catch (error) {
-        console.error("Error in deep verification:", error);
-        toast({
-          title: "Verification Error",
-          description: error instanceof Error ? error.message : "Failed to generate verification logic",
-          variant: "destructive"
-        });
-        
-        // Force stop all loading states on error
-        setIsLoadingAILogic(false);
-        setIsRunningVerification(false);
-        setIsPollingResults(false);
-      }
-      
-      return;
-    }
-    
-    // Simple verification flow
     try {
       const apiUrl = import.meta.env.VITE_API_URL;
       if (!apiUrl) {
         throw new Error("API URL not configured. Please check environment variables.");
       }
       
-      console.log("🚀 FIXED: Starting simple verification with backend at:", apiUrl);
+      const endpoint = level === VerificationLevel.DEEP ? '/verify/deep' : '/verify/simple';
       
-      // Create initial verification record
-      const initialResult: Partial<VerificationResult> = {
-        project_id: activeProject.id,
-        level: level as VerificationLevel,
-        status: VerificationStatus.RUNNING,
-        results: [],
-        logs: ["Starting verification process..."],
-        created_at: new Date().toISOString(),
-      };
-      
-      const { data: verificationRecord, error: insertError } = await supabase
-        .from('verification_results')
-        .insert(initialResult)
-        .select()
-        .single();
-        
-      if (insertError) throw insertError;
-      
-      setVerificationResult(verificationRecord);
-      setIsPollingResults(true);
-      
-      // Start polling immediately
-      startPolling(activeProject.id, verificationRecord.id);
-      
-      const response = await fetch(`${apiUrl}/verify/simple`, {
+      const response = await fetch(`${apiUrl}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -631,13 +332,12 @@ export default function DashboardPage() {
       }
       
       const responseData = await response.json();
-      console.log("Simple verification response:", responseData);
+      console.log("Verification started:", responseData);
+      
+      // The real-time hook will automatically pick up the new verification
       
     } catch (error) {
       console.error("Error starting verification:", error);
-      setIsRunningVerification(false);
-      setIsPollingResults(false);
-      
       toast({
         title: "Verification Error",
         description: error instanceof Error ? error.message : "Failed to start verification",
@@ -655,27 +355,6 @@ export default function DashboardPage() {
         throw new Error("API URL not configured. Please check environment variables.");
       }
       
-      console.log("🔄 SIMPLIFIED: Confirming logic with backend at:", apiUrl);
-      
-      // Update the verification result with confirmed logic and start polling again
-      const { error } = await supabase
-        .from('verification_results')
-        .update({
-          spec_draft: logicText,
-          status: VerificationStatus.RUNNING,
-          logs: [...(verificationResult.logs || []), "Logic confirmed by user. Starting verification..."]
-        })
-        .eq('id', verificationResult.id);
-        
-      if (error) throw error;
-      
-      // Restart polling for the running verification
-      setIsPollingResults(true);
-      setIsRunningVerification(true);
-      setIsLoadingAILogic(false); // Clear AI loading since logic is confirmed
-      startPolling(activeProject.id, verificationResult.id);
-      
-      // Send the logicText as a plain string, not wrapped in an object
       const response = await fetch(`${apiUrl}/verify/confirm/${verificationResult.id}`, {
         method: 'POST',
         headers: {
@@ -705,19 +384,6 @@ export default function DashboardPage() {
         description: error instanceof Error ? error.message : "Failed to process verification",
         variant: "destructive"
       });
-      
-      // Update status to failed if there's an error
-      await supabase
-        .from('verification_results')
-        .update({
-          status: VerificationStatus.FAILED,
-          completed_at: new Date().toISOString(),
-          error_message: error instanceof Error ? error.message : "Unknown error"
-        })
-        .eq('id', verificationResult.id);
-        
-      setIsRunningVerification(false);
-      setIsPollingResults(false);
     }
   };
 
@@ -725,44 +391,23 @@ export default function DashboardPage() {
     if (!verificationResult) return;
     
     try {
-      if (verificationResult.status === VerificationStatus.PENDING) {
-        await supabase
-          .from('verification_results')
-          .delete()
-          .eq('id', verificationResult.id);
-      } else {
-        await supabase
-          .from('verification_results')
-          .update({
-            status: VerificationStatus.FAILED,
-            completed_at: new Date().toISOString(),
-            error_message: "Verification cancelled by user"
-          })
-          .eq('id', verificationResult.id);
-      }
-      
-      setVerificationResult(undefined);
+      await supabase
+        .from('verification_results')
+        .update({
+          status: VerificationStatus.FAILED,
+          completed_at: new Date().toISOString(),
+          error_message: "Verification cancelled by user"
+        })
+        .eq('id', verificationResult.id);
+        
     } catch (error) {
       console.error("Error cancelling verification:", error);
-    } finally {
-      setActiveVerificationTab("verification");
     }
   };
 
   const handleCancelVerification = async (verificationId: string) => {
-    if (!verificationId) return;
-    
     try {
-      console.log(`SIMPLIFIED: Cancelling verification with ID: ${verificationId}`);
-      
-      // Clear polling first
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      
-      // Update the verification result status in database
-      const { error } = await supabase
+      await supabase
         .from('verification_results')
         .update({
           status: VerificationStatus.FAILED,
@@ -770,21 +415,6 @@ export default function DashboardPage() {
           error_message: "Verification cancelled by user"
         })
         .eq('id', verificationId);
-        
-      if (error) {
-        console.error("Error cancelling verification:", error);
-        throw error;
-      }
-      
-      // Stop polling and reset loading states
-      setIsRunningVerification(false);
-      setIsPollingResults(false);
-      setIsLoadingAILogic(false);
-      
-      // Refetch the updated verification result
-      if (activeProject) {
-        fetchLatestVerificationResult(activeProject.id);
-      }
       
       toast({
         title: "Verification Stopped",
@@ -804,7 +434,6 @@ export default function DashboardPage() {
     if (!editorRef.current) return;
     
     editorRef.current.revealLineInCenter(lineNumber);
-    
     editorRef.current.setPosition({ lineNumber, column: 1 });
     
     const decorations = editorRef.current.createDecorationsCollection([
@@ -829,41 +458,17 @@ export default function DashboardPage() {
     editorRef.current = editor;
   };
 
-  const getContractDescription = (code: string): string => {
-    if (code.includes("ERC20") || code.includes("balanceOf") || code.includes("transfer(")) {
-      return "token contract with ERC20-like functionality";
-    } else if (code.includes("ERC721") || code.includes("ownerOf") || code.includes("transferFrom(")) {
-      return "NFT contract with ERC721-like functionality";
-    } else if (code.includes("payable") || code.includes("msg.value")) {
-      return "payment-handling contract";
-    } else if (code.includes("owner") || code.includes("onlyOwner")) {
-      return "contract with ownership controls";
-    } else {
-      return "basic contract";
+  useEffect(() => {
+    if (user) {
+      fetchProjects();
     }
-  };
+  }, [user]);
 
-  // Effect to handle verification result changes
   useEffect(() => {
     if (activeProject) {
       setCode(activeProject.code);
-      fetchLatestVerificationResult(activeProject.id);
     }
   }, [activeProject]);
-
-  // AGGRESSIVE CLEANUP: Enhanced cleanup on unmount with force stop
-  useEffect(() => {
-    return () => {
-      console.log("🧹 FIXED CLEANUP: Component unmounting - force stopping all states");
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      setIsPollingResults(false);
-      setIsRunningVerification(false);
-      setIsLoadingAILogic(false);
-    };
-  }, []);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -873,6 +478,19 @@ export default function DashboardPage() {
   const handleDragLeave = () => {
     setIsDragging(false);
   };
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setIsDragging(false);
+      
+      const file = e.dataTransfer.files?.[0];
+      if (!file || !user) return;
+      
+      await handleFileUploadLogic(file);
+    },
+    [user]
+  );
 
   const renderProjectContent = () => {
     return (
@@ -908,11 +526,11 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex flex-col h-full">
-                <Tabs defaultValue="code" className="flex-1 flex flex-col">
+                <Tabs value={activeCodeTab} onValueChange={(value) => setActiveCodeTab(value as any)} className="flex-1 flex flex-col">
                   <TabsList className="mx-4 mt-2">
                     <TabsTrigger value="code">Code</TabsTrigger>
                     <TabsTrigger value="tests">Tests</TabsTrigger>
-                    <TabsTrigger value="deployment" disabled>Deployment</TabsTrigger>
+                    <TabsTrigger value="deployment">Deployment</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="code" className="flex-1 p-0 overflow-hidden">
@@ -924,31 +542,16 @@ export default function DashboardPage() {
                   </TabsContent>
 
                   <TabsContent value="tests" className="flex-1 p-0 overflow-hidden">
-                    {verificationResult?.cvl_code ? (
-                      <MonacoEditor 
-                        value={verificationResult.cvl_code}
-                        onChange={() => {}}
-                        options={{
-                          readOnly: true,
-                          language: 'plaintext',
-                        }}
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="text-center p-6">
-                          <h3 className="text-lg font-medium mb-2">No CVL code available</h3>
-                          <p className="text-muted-foreground mb-4">
-                            Run an advanced verification to generate CVL code
-                          </p>
-                        </div>
-                      </div>
+                    {activeProject && (
+                      <CvlCodeViewer projectId={activeProject.id} />
                     )}
                   </TabsContent>
 
                   <TabsContent value="deployment" className="flex-1 p-0 overflow-hidden">
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      Deployment features coming soon.
-                    </div>
+                    <DeploymentPanel 
+                      contractCode={code}
+                      contractName={activeProject?.name}
+                    />
                   </TabsContent>
                 </Tabs>
               </div>
@@ -958,16 +561,15 @@ export default function DashboardPage() {
             <div className="h-full">
               <VerificationPanel
                 project={activeProject}
-                activeTab={verificationLevel}
                 onNavigateToLine={handleNavigateToLine}
                 onStartVerification={handleStartVerification}
                 onCancelLogicValidation={handleCancelLogicValidation}
                 onConfirmLogicVerification={handleConfirmLogic}
                 onCancelVerification={handleCancelVerification}
                 verificationResult={verificationResult}
-                isRunningVerification={isRunningVerification}
-                isLoadingAILogic={isLoadingAILogic}
-                isPollingResults={isPollingResults}
+                isRunningVerification={isVerificationLoading}
+                isLoadingAILogic={false}
+                isPollingResults={false}
               />
             </div>
           }
@@ -1027,9 +629,6 @@ export default function DashboardPage() {
       </div>
     );
   };
-
-  // Create verification level state
-  const [verificationLevel, setVerificationLevel] = useState<string>("simple");
 
   return (
     <div className="flex h-screen flex-col">

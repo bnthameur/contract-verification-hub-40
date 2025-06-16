@@ -10,21 +10,8 @@ import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ShieldAlert, ShieldCheck, History, ChevronDown, AlertCircle, RefreshCw, Ban } from "lucide-react";
 import { Link } from "react-router-dom";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/components/ui/alert";
 
-// Import the various components we'll create for the different verification states
+// Import the various components for different verification states
 import { VerificationLoading } from "./states/VerificationLoading";
 import { VerificationCompleted } from "./states/VerificationCompleted";
 import { VerificationEmpty } from "./states/VerificationEmpty";
@@ -34,8 +21,6 @@ import { VerificationConnectionError } from "./states/VerificationConnectionErro
 
 interface VerificationPanelProps {
   project?: Project;
-  activeTab?: string;
-  onTabChange?: (tab: string) => void;
   onNavigateToLine?: (line: number) => void;
   onStartVerification: (level: string) => Promise<void>;
   onCancelLogicValidation?: () => void;
@@ -49,8 +34,6 @@ interface VerificationPanelProps {
 
 export function VerificationPanel({
   project,
-  activeTab = "simple",
-  onTabChange,
   onNavigateToLine,
   onStartVerification,
   onCancelLogicValidation,
@@ -61,26 +44,24 @@ export function VerificationPanel({
   isLoadingAILogic,
   isPollingResults
 }: VerificationPanelProps) {
-  const [verificationLevel, setVerificationLevel] = useState<string>(activeTab);
+  const [verificationLevel, setVerificationLevel] = useState<string>("simple");
   const [backendConnected, setBackendConnected] = useState<boolean>(true);
   const [showNewVerification, setShowNewVerification] = useState<boolean>(false);
   const { toast } = useToast();
 
-  // SIMPLIFIED STATE LOGIC - No more complex polling or force refresh
-  console.log("VerificationPanel SIMPLIFIED state:", {
+  console.log("VerificationPanel state:", {
     verificationResult: !!verificationResult,
     status: verificationResult?.status,
     hasSpecDraft: !!verificationResult?.spec_draft,
     hasResults: !!(verificationResult?.results && verificationResult.results.length > 0),
-    isPollingResults,
     isRunningVerification,
     isLoadingAILogic,
+    isPollingResults,
     showNewVerification,
     backendConnected
   });
 
   useEffect(() => {
-    // Check backend connection
     const checkBackend = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL;
@@ -90,46 +71,28 @@ export function VerificationPanel({
           return;
         }
         
-        // First check if Supabase is accessible as a basic connectivity test
-        const { error } = await supabase.from('projects').select('count', { count: 'exact' }).limit(1);
+        const response = await fetch(`${apiUrl}/ping`, { 
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          mode: 'cors'
+        });
         
-        // Now check if the API backend is accessible using the correct endpoint
-        try {
-          console.log("Checking backend connection at:", apiUrl);
-          const response = await fetch(`${apiUrl}/ping`, { 
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-            cache: 'no-store',
-            mode: 'cors'
-          });
-          
-          if (!response.ok) {
-            console.error("Backend API not accessible:", await response.text());
-            setBackendConnected(false);
-            return;
-          }
-          
-          try {
-            const data = await response.json();
-            
-            // Validate the response has the expected format
-            if (!data || data.status !== "ok") {
-              console.error("Backend API returned unexpected response:", data);
-              setBackendConnected(false);
-              return;
-            }
-            
-            // If both checks pass, backend is connected
-            console.log("Backend connection successful:", data);
-            setBackendConnected(!error);
-          } catch (jsonError) {
-            console.error("Error parsing JSON response:", jsonError);
-            setBackendConnected(false);
-          }
-        } catch (apiError) {
-          console.error("Error connecting to API backend:", apiError);
+        if (!response.ok) {
+          console.error("Backend API not accessible:", await response.text());
           setBackendConnected(false);
+          return;
         }
+        
+        const data = await response.json();
+        if (!data || data.status !== "ok") {
+          console.error("Backend API returned unexpected response:", data);
+          setBackendConnected(false);
+          return;
+        }
+        
+        console.log("Backend connection successful:", data);
+        setBackendConnected(true);
       } catch (error) {
         console.error("Error checking backend connection:", error);
         setBackendConnected(false);
@@ -137,13 +100,9 @@ export function VerificationPanel({
     };
 
     checkBackend();
-    const interval = setInterval(checkBackend, 30000); // Check every 30 seconds
+    const interval = setInterval(checkBackend, 30000);
     return () => clearInterval(interval);
   }, []);
-
-  useEffect(() => {
-    setVerificationLevel(activeTab);
-  }, [activeTab]);
 
   const issues = verificationResult?.results || [];
 
@@ -187,29 +146,28 @@ export function VerificationPanel({
   };
 
   const handleStartNewVerification = () => {
-    console.log("Start New Verification button clicked - SIMPLIFIED");
+    console.log("Start New Verification button clicked");
     setShowNewVerification(true);
   };
 
   const handleCancelNewVerification = () => {
-    console.log("Cancel New Verification - SIMPLIFIED");
+    console.log("Cancel New Verification");
     setShowNewVerification(false);
   };
 
-  // Tab state for completed verification views
   const [activeResultTab, setActiveResultTab] = useState<string>("issues");
 
   const renderVerificationContent = () => {
-    console.log("SIMPLIFIED rendering logic:", {
+    console.log("Rendering verification content:", {
       backendConnected,
       showNewVerification,
       verificationStatus: verificationResult?.status,
       hasSpecDraft: !!verificationResult?.spec_draft,
       hasResults: !!(verificationResult?.results && verificationResult.results.length > 0),
-      isActivelyRunning: isRunningVerification || isLoadingAILogic || isPollingResults
+      isActivelyRunning: isRunningVerification
     });
 
-    // PRIORITY 1: Backend connection check
+    // Backend connection check
     if (!backendConnected) {
       return (
         <VerificationConnectionError 
@@ -219,9 +177,9 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 2: Show new verification form if requested
+    // Show new verification form if requested
     if (showNewVerification) {
-      console.log("✅ SIMPLIFIED: Showing new verification form");
+      console.log("Showing new verification form");
       return (
         <VerificationFormNew
           verificationLevel={verificationLevel}
@@ -233,14 +191,9 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 3: Show loading ONLY when actively running AND no results/spec_draft yet
-    if ((isRunningVerification || isLoadingAILogic || isPollingResults) && 
-        (!verificationResult || 
-         (verificationResult.status === VerificationStatus.PENDING || 
-          verificationResult.status === VerificationStatus.RUNNING)) &&
-        !verificationResult?.spec_draft && 
-        (!verificationResult?.results || verificationResult.results.length === 0)) {
-      console.log("✅ SIMPLIFIED: Showing loading state");
+    // Show loading when verification is running
+    if (isRunningVerification && verificationResult?.status === VerificationStatus.RUNNING) {
+      console.log("Showing loading state");
       return (
         <VerificationLoading
           verificationLevel={verificationLevel}
@@ -249,10 +202,10 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 4: Show logic validation when spec_draft is available
+    // Show logic validation when spec_draft is available
     if (verificationResult?.spec_draft && 
         verificationResult.status === VerificationStatus.AWAITING_CONFIRMATION) {
-      console.log("✅ SIMPLIFIED: Showing logic validation");
+      console.log("Showing logic validation");
       return (
         <LogicValidation 
           project_id={project?.id || ''}
@@ -265,10 +218,10 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 5: Show completed verification with results
+    // Show completed verification with results
     if (verificationResult?.status === VerificationStatus.COMPLETED && 
         verificationResult.results && verificationResult.results.length > 0) {
-      console.log("✅ SIMPLIFIED: Showing completed verification results");
+      console.log("Showing completed verification results");
       return (
         <VerificationCompleted 
           verificationResult={verificationResult}
@@ -281,9 +234,9 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 6: Show failed state
+    // Show failed state
     if (verificationResult?.status === VerificationStatus.FAILED) {
-      console.log("✅ SIMPLIFIED: Showing failed state");
+      console.log("Showing failed state");
       return (
         <VerificationFailed 
           onRetry={handleStartNewVerification}
@@ -292,9 +245,9 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 7: Show empty state for projects without verification history OR show latest results
+    // Show empty state for projects without verification history
     if (!verificationResult) {
-      console.log("✅ SIMPLIFIED: Showing empty state (no verification history)");
+      console.log("Showing empty state (no verification history)");
       return (
         <VerificationEmpty 
           verificationLevel={verificationLevel}
@@ -305,9 +258,9 @@ export function VerificationPanel({
       );
     }
     
-    // PRIORITY 8: Show latest verification results if available
+    // Show latest verification results if available
     if (verificationResult && verificationResult.results && verificationResult.results.length > 0) {
-      console.log("✅ SIMPLIFIED: Showing latest verification results");
+      console.log("Showing latest verification results");
       return (
         <VerificationCompleted 
           verificationResult={verificationResult}
@@ -320,8 +273,8 @@ export function VerificationPanel({
       );
     }
     
-    // FALLBACK: Show start new verification button
-    console.log("⚠️ SIMPLIFIED: Showing fallback start new verification button");
+    // Fallback: Show start new verification button
+    console.log("Showing fallback start new verification button");
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
         <ShieldCheck className="h-16 w-16 text-muted-foreground mb-4" />
