@@ -1,3 +1,4 @@
+
 import { Navbar } from "@/components/layout/Navbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ResizableLayout } from "@/components/layout/ResizableLayout";
@@ -180,19 +181,6 @@ export default function DashboardPage() {
       });
     }
   };
-
-  const handleDrop = useCallback(
-    async (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      setIsDragging(false);
-      
-      const file = e.dataTransfer.files?.[0];
-      if (!file || !user) return;
-      
-      await handleFileUploadLogic(file);
-    },
-    [user]
-  );
 
   const handleFileUploadLogic = async (file: File) => {
     if (!user) {
