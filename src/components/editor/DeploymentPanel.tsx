@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -450,7 +449,7 @@ export function DeploymentPanel({ contractCode, contractName = 'Contract', proje
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Chain ID:</span>
-                  <Badge variant={walletState.chainId === selectedNetworkConfig?.chainId ? "success" : "warning"}>
+                  <Badge variant={walletState.chainId === selectedNetworkConfig?.chainId ? "default" : "secondary"}>
                     {walletState.chainId}
                   </Badge>
                 </div>
@@ -499,7 +498,8 @@ export function DeploymentPanel({ contractCode, contractName = 'Contract', proje
                       onClick={compileContract} 
                       disabled={isCompiling || !contractCode.trim()}
                       size="sm"
-                      variant={compilationResult ? "success" : "default"}
+                      variant={compilationResult ? "default" : "default"}
+                      className={compilationResult ? "bg-green-600 hover:bg-green-700" : ""}
                     >
                       {isCompiling ? (
                         <>
